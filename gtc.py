@@ -474,6 +474,39 @@ def menu_generate():
     print(f"\nBerhasil! Akun tersimpan dengan nama '{name}'.")
 
 
+def menu_track_ip():
+    target = input("Masukkan IP Address atau Domain target (contoh: 8.8.8.8 atau google.com): ").strip()
+    if not target:
+        print("Target tidak boleh kosong!")
+        return
+        
+    print(f"\nMelacak informasi untuk: {target}...")
+    url = f"http://ip-api.com/json/{target}"
+    fields = "status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query"
+    
+    try:
+        response = requests.get(url, params={"fields": fields}, timeout=15)
+        response.raise_for_status()
+        result = response.json()
+        
+        if result.get("status") == "success":
+            print("\n[+] Hasil Pelacakan Berhasil:")
+            print(f"- IP/Domain : {result.get('query')}")
+            print(f"- Negara    : {result.get('country')} ({result.get('countryCode')})")
+            print(f"- Wilayah   : {result.get('regionName')} (Kode: {result.get('region')})")
+            print(f"- Kota      : {result.get('city')}")
+            print(f"- Kode Pos  : {result.get('zip')}")
+            print(f"- Koordinat : Lat {result.get('lat')}, Lon {result.get('lon')}")
+            print(f"- Zona Waktu: {result.get('timezone')}")
+            print(f"- ISP       : {result.get('isp')}")
+            print(f"- Organisasi: {result.get('org')}")
+        else:
+            print("\n[-] Gagal melacak IP tersebut.")
+            print(f"Pesan error: {result.get('message', 'Tidak diketahui')}")
+    except requests.exceptions.RequestException as e:
+        print(f"\n[-] Koneksi gagal: {str(e)}")
+
+
 BANNER = r"""
  ██████╗ ███████╗████████╗ ██████╗ ██████╗ ███╗   ██╗████████╗ █████╗  ██████╗████████╗
 ██╔════╝ ██╔════╝╚══██╔══╝██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔══██╗██╔════╝╚══██╔══╝
@@ -481,7 +514,7 @@ BANNER = r"""
 ██║   ██║██╔══╝     ██║   ██║     ██║   ██║██║╚██╗██║   ██║   ██╔══██║██║        ██║   
 ╚██████╔╝███████╗   ██║   ╚██████╗╚██████╔╝██║ ╚████║   ██║   ██║  ██║╚██████╗   ██║   
  ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝   ╚═╝                                                                            
-Credits By RendiSec 
+By mfajarb 
 """
 
 MENU = [
@@ -493,6 +526,7 @@ MENU = [
     ("Lihat/ganti akun tersimpan", "credlist"),
     ("Tambah akun baru (butuh WhatsApp)", "generate"),
     ("Credits Pembuat Tools", "credits"),
+    ("Track IP / Domain", "trackip"),
 ]
 
 
@@ -554,6 +588,8 @@ def interactive() -> int:
                 menu_cred_list()
             elif action == "generate":
                 menu_generate()
+            elif action == "trackip":
+                menu_track_ip()
                 
             input("\nTekan Enter untuk kembali ke menu... ")
             print("\n" * 2)
