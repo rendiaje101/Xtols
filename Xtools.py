@@ -39,6 +39,9 @@ TIME_ZONE = "Asia/Bangkok"
 BUNDLE_ID = "app.source.getcontact"
 CARRIER = ("510", "Indosat Ooredoo", "01")
 
+# Konfigurasi Sandi Login
+LOGIN_PASSWORD = "setup179TolssX"  # <-- Anda bisa mengubah sandi ini di sini
+
 # Diffie-Hellman params
 DH_P = 900719898367
 DH_G = 7
@@ -46,9 +49,6 @@ DH_G = 7
 CONFIG_DIR = Path(os.environ.get("GTC_CONFIG_DIR", Path.home() / ".config" / "gtc"))
 CRED_FILE = CONFIG_DIR / "credentials.json"
 RESULTS_DIR = Path(os.environ.get("GTC_RESULTS_DIR", Path(__file__).resolve().parent / "results"))
-
-# === SANDI MASUK (Ubah sesuai keinginan Anda) ===
-SANDI_RAHASIA = "1234"
 
 
 class GtcError(Exception):
@@ -72,7 +72,7 @@ def encrypt(data: str, key_hex: str) -> str:
 
 
 def decrypt(data: str, key_hex: str) -> str:
-    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).encryptor()
+    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).decryptor()
     out = dec.update(base64.b64decode(data)) + dec.finalize()
     return out[: -out[-1]].decode()
 
@@ -101,7 +101,6 @@ def _post(url: str, body: str, headers: dict, timeout: int = 25) -> requests.Res
 
 def gtc_call(endpoint: str, payload: dict, *, token: str, final_key: str,
              device_id: str, encrypted: bool = True) -> tuple[int, dict]:
-    """POST to a GetContact endpoint. Returns (http_code, decrypted_json)."""
     raw = json.dumps(payload, ensure_ascii=False)
     ts = _ts()
     headers = {
@@ -129,7 +128,6 @@ def gtc_call(endpoint: str, payload: dict, *, token: str, final_key: str,
 
 
 def vfk_call(endpoint: str, payload: dict, device_id: str) -> tuple[int, dict]:
-    """VerifyKit call — fixed version (compact JSON + App-Version 8.16.0)."""
     raw = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
     ts = _ts()
     headers = {
@@ -523,14 +521,12 @@ def menu_track_phone_number():
     prefix = cleaned[:5]
 
     provider_map = {
-        # Telkomsel
         "62811": {"provider": "Telkomsel (Kartu Halo)", "region": "Nasional"},
         "62812": {"provider": "Telkomsel (simPATI)", "region": "Jabodetabek"},
         "62813": {"provider": "Telkomsel (simPATI)", "region": "Jawa Timur"},
         "62821": {"provider": "Telkomsel (Kartu AS)", "region": "Jawa Tengah"},
         "62822": {"provider": "Telkomsel (Kartu AS)", "region": "Bali & Nusa Tenggara"},
         "62823": {"provider": "Telkomsel (Loop)", "region": "Sumatera"},
-        # Indosat
         "62814": {"provider": "Indosat (IM3)", "region": "Jabodetabek"},
         "62815": {"provider": "Indosat (Mentari)", "region": "Jawa Barat"},
         "62816": {"provider": "Indosat (Matrix)", "region": "Nasional"},
@@ -538,30 +534,25 @@ def menu_track_phone_number():
         "62856": {"provider": "Indosat (IM3 Ooredoo)", "region": "Jawa Timur"},
         "62857": {"provider": "Indosat (IM3 Ooredoo)", "region": "Kalimantan"},
         "62858": {"provider": "Indosat (IM3 Ooredoo)", "region": "Sulawesi"},
-        # XL
         "62817": {"provider": "XL Axiata", "region": "Jabodetabek"},
         "62818": {"provider": "XL Axiata", "region": "Jawa Tengah & Timur"},
         "62819": {"provider": "XL Axiata", "region": "Sumatera & Kalimantan"},
         "62859": {"provider": "XL Prabayar", "region": "Nasional"},
         "62877": {"provider": "XL Prabayar", "region": "Jawa Barat"},
         "62878": {"provider": "XL Prabayar", "region": "Bali, NTB, NTT"},
-        # Tri
         "62895": {"provider": "Tri (3)", "region": "Jakarta"},
         "62896": {"provider": "Tri (3)", "region": "Jawa Tengah"},
         "62897": {"provider": "Tri (3)", "region": "Jawa Timur"},
         "62898": {"provider": "Tri (3)", "region": "Sumatera"},
         "62899": {"provider": "Tri (3)", "region": "Sulawesi"},
-        # Smartfren
         "62881": {"provider": "Smartfren", "region": "Jabodetabek"},
         "62882": {"provider": "Smartfren", "region": "Jawa Barat"},
         "62883": {"provider": "Smartfren", "region": "Jawa Tengah"},
         "62884": {"provider": "Smartfren", "region": "Nasional"},
-        # Axis
         "62831": {"provider": "Axis", "region": "Jabodetabek"},
         "62832": {"provider": "Axis", "region": "Jawa Tengah"},
         "62833": {"provider": "Axis", "region": "Jawa Timur"},
         "62838": {"provider": "Axis", "region": "Sumatera"},
-        # By.U
         "62851": {"provider": "By.U (Telkomsel Digital)", "region": "Online / Nasional"}
     }
 
@@ -603,28 +594,14 @@ def menu_track_phone_number():
 - Status: {status_text}""")
 
 
-# Banner ASCII khusus untuk Login/Autentikasi
-LOGIN_BANNER = r"""
- ██████╗ ███████╗ ██████╗ ███████╗███╗   ██╗████████╗
-██╔════╝ ██╔════╝██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
-██║      ███████╗██║  ███╗███████╗██╔██╗ ██║   ██║   
-██║      ╚════██║██║   ██║╚════██║██║╚██╗██║   ██║   
-╚██████╗ ███████║╚██████╔╝███████║██║ ╚████║   ██║   
- ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   
-=====================================================
-            AUTHENTICATION REQUIRED
-================================================─────
-"""
-
-# Banner ASCII Utama untuk Menu
 BANNER = r"""
-██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
+ ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
 ╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
  ╚███╔╝    ██║   ██║   ██║██║     ███████╗
  ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
 ██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
-╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝
-V: 3.8.2                                       
+╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝                                                     
+Tols By RendiSec 
 """
 
 MENU = [
@@ -648,18 +625,28 @@ def ask(prompt: str) -> str:
         return "0"
 
 
-def interactive() -> int:
-    # Tampilan Banner Login yang Keren
-    print(LOGIN_BANNER)
-    while True:
-        sandi_input = input("🔒 Masukkan Sandi Akses: ").strip()
-        if sandi_input == SANDI_RAHASIA:
-            print("\n[+] Autentikasi Berhasil! Memuat sistem...\n")
-            time.sleep(1.2)
-            break
+def check_login() -> bool:
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
+        print(BANNER)
+        print("=== AUTENTIKASI LOGIN DIPERLUKAN ===\n")
+        password = input("Masukkan sandi login: ").strip()
+        if password == LOGIN_PASSWORD:
+            print("\n[+] Login Berhasil! Selamat datang.\n")
+            time.sleep(1)
+            return True
         else:
-            print("[-] Sandi Salah! Akses ditolak. Coba lagi.\n")
+            remaining = max_attempts - attempt
+            print(f"\n[-] Sandi salah! Sisa percobaan: {remaining}")
+            if remaining > 0:
+                time.sleep(1.5)
+            else:
+                print("[-] Batas percobaan habis. Akses ditolak.")
+                return False
+    return False
 
+
+def interactive() -> int:
     while True:
         print(BANNER)
         store = load_store() if CRED_FILE.exists() else {}
@@ -667,15 +654,15 @@ def interactive() -> int:
         print(f"Status Akun Aktif: {active}\n")
         print("Pilih fitur:")
         for i, (label, _) in enumerate(MENU, 1):
-            num_str = f"{i:02d}"
-            print(f"  {num_str}. {label}")
+            # Menggunakan f-string dengan :02d agar otomatis menjadi 01, 02, dst.
+            print(f"  {i:02d}. {label}")
         print("  00. Keluar\n")
         
         choice = ask("Nomor pilihan: ")
-        if choice in ("00", "0", "q", "keluar", ""):
+        # Mendukung input baik '0', '00', maupun 'keluar'
+        if choice in ("0", "00", "q", "keluar", ""):
             print("Keluar...")
             return 0
-        
         try:
             idx = int(choice) - 1
             if not (0 <= idx < len(MENU)):
@@ -730,6 +717,8 @@ def interactive() -> int:
 
 
 def main() -> int:
+    if not check_login():
+        return 1
     return interactive()
 
 
