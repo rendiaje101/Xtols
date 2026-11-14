@@ -40,7 +40,10 @@ BUNDLE_ID = "app.source.getcontact"
 CARRIER = ("510", "Indosat Ooredoo", "01")
 
 # Konfigurasi Sandi Login
-LOGIN_PASSWORD = "setup179TolssX"  # <-- Anda bisa mengubah sandi ini di sini
+LOGIN_PASSWORD = "RendiSec123"  # <-- Anda bisa mengubah sandi ini di sini
+
+# Cloud Function AI Endpoint
+AI_ENDPOINT = "https://us-central1-ai-chat-bot-bf47e.cloudfunctions.net/chat_function_android"
 
 # Diffie-Hellman params
 DH_P = 900719898367
@@ -594,6 +597,51 @@ def menu_track_phone_number():
 - Status: {status_text}""")
 
 
+def menu_ai_chat():
+    prompt = input("Masukkan pertanyaan/pesan untuk Cloud AI (ketik 'keluar' untuk kembali): ").strip()
+    if not prompt or prompt.lower() in ("keluar", "q"):
+        return
+
+    print("\nMenghubungkan ke Cloud AI...")
+    
+    payload = {
+        "data": {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {"role": "user", "content": prompt}
+            ],
+            "timeZone": TIME_ZONE,
+            "countryCode": COUNTRY
+        }
+    }
+
+    try:
+        response = requests.post(AI_ENDPOINT, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+        response.raise_for_status()
+        res_json = response.json()
+        
+        # Mengambil teks jawaban langsung dari jalur hasil respons server AI
+        answer = None
+        choice = dig(res_json, "result.choices.0")
+        if choice:
+            answer = dig(choice, "message.content") or dig(choice, "text")
+            
+        if not answer:
+            answer = dig(res_json, "result.text") or dig(res_json, "text") or dig(res_json, "response")
+
+        if answer:
+            print("\n🤖 [Jawaban Cloud AI]:")
+            print("-" * 40)
+            print(str(answer).strip())
+            print("-" * 40)
+        else:
+            print("\n[-] Format data respons tidak dikenali:")
+            print(json.dumps(res_json, indent=2, ensure_ascii=False))
+            
+    except Exception as e:
+        print(f"\n[-] Error terhubung ke Cloud AI Endpoint: {str(e)}")
+
+
 BANNER = r"""
  ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
 ╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
@@ -615,6 +663,7 @@ MENU = [
     ("Credits Pembuat Tools", "credits"),
     ("Track IP / Domain", "trackip"),
     ("Track Nomor Telepon (Operator & Wilayah)", "trackphone"),
+    ("Tanya Cloud AI (Gemini/GPT)", "cloud_ai"),
 ]
 
 
@@ -654,12 +703,10 @@ def interactive() -> int:
         print(f"Status Akun Aktif: {active}\n")
         print("Pilih fitur:")
         for i, (label, _) in enumerate(MENU, 1):
-            # Menggunakan f-string dengan :02d agar otomatis menjadi 01, 02, dst.
             print(f"  {i:02d}. {label}")
         print("  00. Keluar\n")
         
         choice = ask("Nomor pilihan: ")
-        # Mendukung input baik '0', '00', maupun 'keluar'
         if choice in ("0", "00", "q", "keluar", ""):
             print("Keluar...")
             return 0
@@ -703,6 +750,8 @@ def interactive() -> int:
                 menu_track_ip()
             elif action == "trackphone":
                 menu_track_phone_number()
+            elif action == "cloud_ai":
+                menu_ai_chat()
                 
             input("\nTekan Enter untuk kembali ke menu... ")
             print("\n" * 2)
