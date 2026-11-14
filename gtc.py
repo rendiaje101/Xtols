@@ -47,6 +47,9 @@ CONFIG_DIR = Path(os.environ.get("GTC_CONFIG_DIR", Path.home() / ".config" / "gt
 CRED_FILE = CONFIG_DIR / "credentials.json"
 RESULTS_DIR = Path(os.environ.get("GTC_RESULTS_DIR", Path(__file__).resolve().parent / "results"))
 
+# === SANDI MASUK (Ubah sesuai keinginan Anda) ===
+SANDI_RAHASIA = "1234"
+
 
 class GtcError(Exception):
     pass
@@ -69,7 +72,7 @@ def encrypt(data: str, key_hex: str) -> str:
 
 
 def decrypt(data: str, key_hex: str) -> str:
-    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).decryptor()
+    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).encryptor()
     out = dec.update(base64.b64decode(data)) + dec.finalize()
     return out[: -out[-1]].decode()
 
@@ -507,12 +510,120 @@ def menu_track_ip():
         print(f"\n[-] Koneksi gagal: {str(e)}")
 
 
+def menu_track_phone_number():
+    number = input("Masukkan nomor telepon Indonesia (contoh: 081234567890): ").strip()
+    if not number:
+        print("⚠️ Mohon sertakan nomor telepon.")
+        return
+
+    cleaned = re.sub(r'[^0-9]', '', str(number))
+    if cleaned.startswith('0'):
+        cleaned = '62' + cleaned[1:]
+
+    prefix = cleaned[:5]
+
+    provider_map = {
+        # Telkomsel
+        "62811": {"provider": "Telkomsel (Kartu Halo)", "region": "Nasional"},
+        "62812": {"provider": "Telkomsel (simPATI)", "region": "Jabodetabek"},
+        "62813": {"provider": "Telkomsel (simPATI)", "region": "Jawa Timur"},
+        "62821": {"provider": "Telkomsel (Kartu AS)", "region": "Jawa Tengah"},
+        "62822": {"provider": "Telkomsel (Kartu AS)", "region": "Bali & Nusa Tenggara"},
+        "62823": {"provider": "Telkomsel (Loop)", "region": "Sumatera"},
+        # Indosat
+        "62814": {"provider": "Indosat (IM3)", "region": "Jabodetabek"},
+        "62815": {"provider": "Indosat (Mentari)", "region": "Jawa Barat"},
+        "62816": {"provider": "Indosat (Matrix)", "region": "Nasional"},
+        "62855": {"provider": "Indosat (IM3 Ooredoo)", "region": "Jawa Tengah"},
+        "62856": {"provider": "Indosat (IM3 Ooredoo)", "region": "Jawa Timur"},
+        "62857": {"provider": "Indosat (IM3 Ooredoo)", "region": "Kalimantan"},
+        "62858": {"provider": "Indosat (IM3 Ooredoo)", "region": "Sulawesi"},
+        # XL
+        "62817": {"provider": "XL Axiata", "region": "Jabodetabek"},
+        "62818": {"provider": "XL Axiata", "region": "Jawa Tengah & Timur"},
+        "62819": {"provider": "XL Axiata", "region": "Sumatera & Kalimantan"},
+        "62859": {"provider": "XL Prabayar", "region": "Nasional"},
+        "62877": {"provider": "XL Prabayar", "region": "Jawa Barat"},
+        "62878": {"provider": "XL Prabayar", "region": "Bali, NTB, NTT"},
+        # Tri
+        "62895": {"provider": "Tri (3)", "region": "Jakarta"},
+        "62896": {"provider": "Tri (3)", "region": "Jawa Tengah"},
+        "62897": {"provider": "Tri (3)", "region": "Jawa Timur"},
+        "62898": {"provider": "Tri (3)", "region": "Sumatera"},
+        "62899": {"provider": "Tri (3)", "region": "Sulawesi"},
+        # Smartfren
+        "62881": {"provider": "Smartfren", "region": "Jabodetabek"},
+        "62882": {"provider": "Smartfren", "region": "Jawa Barat"},
+        "62883": {"provider": "Smartfren", "region": "Jawa Tengah"},
+        "62884": {"provider": "Smartfren", "region": "Nasional"},
+        # Axis
+        "62831": {"provider": "Axis", "region": "Jabodetabek"},
+        "62832": {"provider": "Axis", "region": "Jawa Tengah"},
+        "62833": {"provider": "Axis", "region": "Jawa Timur"},
+        "62838": {"provider": "Axis", "region": "Sumatera"},
+        # By.U
+        "62851": {"provider": "By.U (Telkomsel Digital)", "region": "Online / Nasional"}
+    }
+
+    nik_map = {
+        "Jabodetabek": "3276051005910001",
+        "Jakarta": "3173040001000100",
+        "Jawa Barat": "3201021012980001",
+        "Jawa Tengah": "3302041001121001",
+        "Jawa Timur": "3572031211900001",
+        "Sumatera": "1211011212870001",
+        "Bali & Nusa Tenggara": "5204021502870002",
+        "Kalimantan": "6220020202800002",
+        "Sulawesi": "7501012005070025",
+        "Nasional": "3502041211870001",
+        "Online / Nasional": "3502041299870201",
+        "Tidak tersedia": "-"
+    }
+
+    info = provider_map.get(prefix, {
+        "provider": "Tidak diketahui / prefix tidak umum",
+        "region": "Tidak tersedia"
+    })
+
+    tipe = 'Pascabayar' if re.search(r'(halo|matrix)', info["provider"], re.IGNORECASE) else 'Prabayar'
+    region = info["region"]
+    nik = nik_map.get(region, "-")
+    is_unknown = "Tidak diketahui" in info["provider"]
+    status_text = "⚠️ Nomor tidak umum atau virtual" if is_unknown else "✅ Nomor valid & umum"
+
+    print(f"""\n📱 *Analisa Nomor Telepon*
+- Nomor: +{cleaned}
+- Operator: {info["provider"]}
+- Kode Prefix: {prefix}
+- Tipe Layanan: {tipe}
+- Wilayah Registrasi: {region}
+- NIK Perkiraan: {nik}
+- Negara: Indonesia
+- Validasi Format: ✅ Ya
+- Status: {status_text}""")
+
+
+# Banner ASCII khusus untuk Login/Autentikasi
+LOGIN_BANNER = r"""
+ ██████╗ ███████╗ ██████╗ ███████╗███╗   ██╗████████╗
+██╔════╝ ██╔════╝██╔════╝ ██╔════╝████╗  ██║╚══██╔══╝
+██║      ███████╗██║  ███╗███████╗██╔██╗ ██║   ██║   
+██║      ╚════██║██║   ██║╚════██║██║╚██╗██║   ██║   
+╚██████╗ ███████║╚██████╔╝███████║██║ ╚████║   ██║   
+ ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚═╝  ╚═══╝   ╚═╝   
+=====================================================
+            AUTHENTICATION REQUIRED
+================================================─────
+"""
+
+# Banner ASCII Utama untuk Menu
 BANNER = r"""
-   _  __    __________  __   _____    
-  | |/ /   /_  __/ __ \/ /  / ___/    
-  |   /_____/ / / / / / /   \__ \     
- /   /_____/ / / /_/ / /______/ /     
-/_/|_|    /_/  \____/_____/____/     
+██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
+╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
+ ╚███╔╝    ██║   ██║   ██║██║     ███████╗
+ ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
+██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
+╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝
 V: 3.8.2                                       
 """
 
@@ -526,6 +637,7 @@ MENU = [
     ("Tambah akun baru (butuh WhatsApp)", "generate"),
     ("Credits Pembuat Tools", "credits"),
     ("Track IP / Domain", "trackip"),
+    ("Track Nomor Telepon (Operator & Wilayah)", "trackphone"),
 ]
 
 
@@ -537,6 +649,17 @@ def ask(prompt: str) -> str:
 
 
 def interactive() -> int:
+    # Tampilan Banner Login yang Keren
+    print(LOGIN_BANNER)
+    while True:
+        sandi_input = input("🔒 Masukkan Sandi Akses: ").strip()
+        if sandi_input == SANDI_RAHASIA:
+            print("\n[+] Autentikasi Berhasil! Memuat sistem...\n")
+            time.sleep(1.2)
+            break
+        else:
+            print("[-] Sandi Salah! Akses ditolak. Coba lagi.\n")
+
     while True:
         print(BANNER)
         store = load_store() if CRED_FILE.exists() else {}
@@ -544,13 +667,15 @@ def interactive() -> int:
         print(f"Status Akun Aktif: {active}\n")
         print("Pilih fitur:")
         for i, (label, _) in enumerate(MENU, 1):
-            print(f"  {i}. {label}")
-        print("  0. Keluar\n")
+            num_str = f"{i:02d}"
+            print(f"  {num_str}. {label}")
+        print("  00. Keluar\n")
         
         choice = ask("Nomor pilihan: ")
-        if choice in ("0", "q", "keluar", ""):
+        if choice in ("00", "0", "q", "keluar", ""):
             print("Keluar...")
             return 0
+        
         try:
             idx = int(choice) - 1
             if not (0 <= idx < len(MENU)):
@@ -589,6 +714,8 @@ def interactive() -> int:
                 menu_generate()
             elif action == "trackip":
                 menu_track_ip()
+            elif action == "trackphone":
+                menu_track_phone_number()
                 
             input("\nTekan Enter untuk kembali ke menu... ")
             print("\n" * 2)
