@@ -148,9 +148,9 @@ fi
 # ── Langkah 4: Periksa File Tool & Jalankan ────────────────────
 echo -e "${YELLOW}[4/4] Memeriksa file tool...${RESET}"
 if [ ! -f gtc.py ]; then
-  err "File gtc.py tidak ditemukan!"; exit 1
+  err "File Xtools.py tidak ditemukan!"; exit 1
 fi
-ok "gtc.py siap"
+ok "Xtools.py siap"
 
 echo ""
 echo -e "${GREEN}${BOLD}═══ Instalasi Selesai! ═══${RESET}"
@@ -160,11 +160,11 @@ if [ "$RUN_TOOL" = "1" ]; then
   echo -e "${CYAN}Tool sedang dimulai... (Tekan angka 0 di menu untuk keluar)${RESET}"
   echo ""
   if command -v python3 >/dev/null 2>&1; then
-    python3 gtc.py
+    python3 Xtools.py
   else
-    python gtc.py
+    python Xtools.py
   fi
 else
   echo -e "${CYAN}Cara menjalankan tool secara manual:${RESET}"
-  echo "  python3 gtc.py"
+  echo "  python3 Xtools.py"
 fi
