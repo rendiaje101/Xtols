@@ -28,7 +28,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
 init(autoreset=True)
 
-# Konfigurasi Dasar
+#  config
 GTC_BASE = "https://pbssrv-centralevents.com"
 VFK_BASE = "https://api.verifykit.com"
 HMAC_KEY = "31426764382a642f3a6665497235466f3d236d5d785b722b4c657457442a495b494524324866782a2364292478587a78662d7a7b7578593f71703e2b7e365762"
@@ -45,8 +45,8 @@ TIME_ZONE = "Asia/Bangkok"
 BUNDLE_ID = "app.source.getcontact"
 CARRIER = ("510", "Indosat Ooredoo", "01")
 
-# Sandi Login Tool
-LOGIN_PASSWORD = "RendiSec123"
+# Konfigurasi Sandi Login
+LOGIN_PASSWORD = "RendiSec123"  # <-- Anda bisa mengubah sandi ini di sini
 
 # Cloud Function AI Endpoint
 AI_ENDPOINT = "https://us-central1-ai-chat-bot-bf47e.cloudfunctions.net/chat_function_android"
@@ -64,7 +64,7 @@ class GtcError(Exception):
     pass
 
 
-# Enkripsi & Dekripsi
+#  crypto
 def _sig(ts: str, message: str, key_hex: str) -> str:
     mac = hmac.new(bytes.fromhex(key_hex), f"{ts}-{message}".encode(), hashlib.sha256)
     return base64.b64encode(mac.digest()).decode()
@@ -103,6 +103,7 @@ def new_device_id() -> str:
     return secrets.token_hex(8)
 
 
+#  http
 def _post(url: str, body: str, headers: dict, timeout: int = 25) -> requests.Response:
     return requests.post(url, data=body, headers=headers, timeout=timeout)
 
@@ -169,6 +170,7 @@ def dig(obj, path, default=None):
     return obj
 
 
+#  store
 def load_store() -> dict:
     if not CRED_FILE.exists():
         return {"active": None, "credentials": {}}
@@ -203,6 +205,7 @@ def normalize_phone(raw: str) -> str:
     raise GtcError(f"Invalid phone number: {raw}")
 
 
+#  features logic
 def api_search(cred: dict, phone: str, source: str) -> dict:
     endpoint = "/v2.8/number-detail" if source == "tags" else "/v2.8/search"
     payload = {
@@ -243,186 +246,8 @@ def show_captcha(b64_image: str) -> Path:
     return path
 
 
-BANNER = r"""
- ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
-╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
- ╚███╔╝    ██║   ██║   ██║██║     ███████╗
- ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
-██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
-╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝                                                     
-Tols By RendiSec 
-"""
-
-
-def show_xtols_banner(title_text: str):
-    os.system('clear' if os.name == 'posix' else 'cls')
-    print(BANNER)
-    print(f"=== {title_text} ===\n")
-
-
-def rgb_color(tick, offset=0):
-    r = int((math.sin(tick * 0.5 + offset) + 1) * 127)
-    g = int((math.sin(tick * 0.5 + offset + 2) + 1) * 127)
-    b = int((math.sin(tick * 0.5 + offset + 4) + 1) * 127)
-    return f"\033[38;2;{r};{g};{b}m"
-
-
-class MatrixBackground:
-    def __init__(self):
-        try:
-            self.width = shutil.get_terminal_size().columns
-            self.height = shutil.get_terminal_size().lines
-        except:
-            self.width = 80
-            self.height = 24
-        
-        self.width = max(40, self.width)
-        self.height = max(10, self.height)
-        
-        self.columns = []
-        self.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()'
-        self.init_columns()
-    
-    def init_columns(self):
-        self.columns = []
-        for x in range(self.width):
-            length = random.randint(8, 25)
-            col = {
-                'x': x,
-                'y': random.randint(-self.height, 0),
-                'speed': random.uniform(0.8, 2.5),
-                'length': length,
-                'chars': [random.choice(self.chars) for _ in range(length)],
-                'bright_pos': random.randint(0, length-1)
-            }
-            self.columns.append(col)
-    
-    def update(self):
-        for col in self.columns:
-            col['y'] += col['speed'] * 0.6
-            
-            if col['y'] > self.height + col['length']:
-                col['y'] = random.randint(-self.height, 0)
-                col['length'] = random.randint(8, 25)
-                col['chars'] = [random.choice(self.chars) for _ in range(col['length'])]
-                col['speed'] = random.uniform(0.8, 2.5)
-                col['bright_pos'] = random.randint(0, col['length']-1)
-            
-            if random.random() < 0.03:
-                for i in range(len(col['chars'])):
-                    if random.random() < 0.3:
-                        col['chars'][i] = random.choice(self.chars)
-    
-    def render(self, overlay_lines=None):
-        sys.stdout.write('\033[?25l')
-        sys.stdout.write('\033[H')
-        
-        screen = []
-        for y in range(self.height):
-            screen.append([' ' for _ in range(self.width)])
-        
-        for col in self.columns:
-            x = col['x']
-            start_y = int(col['y'])
-            
-            for i in range(col['length']):
-                y = start_y + i
-                if 0 <= y < self.height and 0 <= x < self.width:
-                    char = col['chars'][i % len(col['chars'])]
-                    
-                    if i == col['bright_pos']:
-                        color = Fore.GREEN + Style.BRIGHT
-                    elif i < col['bright_pos'] + 4 and i > col['bright_pos'] - 2:
-                        color = Fore.GREEN
-                    else:
-                        color = Fore.GREEN + Style.DIM
-                    
-                    screen[y][x] = color + char + Style.RESET_ALL
-        
-        for y in range(self.height):
-            print(''.join(screen[y]))
-        
-        if overlay_lines:
-            filtered = [line for line in overlay_lines if line.strip()]
-            overlay_height = len(filtered)
-            start_y = (self.height - overlay_height) // 2
-            
-            for i, line in enumerate(filtered):
-                if line.strip():
-                    clean_line = re.sub(r'\x1b\[[0-9;]*m', '', line)
-                    x_pos = (self.width - len(clean_line)) // 2
-                    if x_pos < 0:
-                        x_pos = 0
-                    sys.stdout.write(f'\033[{start_y + i};{x_pos}H')
-                    print(line, end='')
-        
-        sys.stdout.write('\033[?25h')
-
-
-def matrix_rain_animation(duration=3.5):
-    matrix = MatrixBackground()
-    
-    ascii_rendisec = [
-        "██████╗ ███████╗███╗   ██╗██████╗ ██╗███████╗███████╗ ██████╗",
-        "██╔══██╗██╔════╝████╗  ██║██╔══██╗██║██╔════╝██╔════╝██╔════╝",
-        "██████╔╝█████╗  ██╔██╗ ██║██║  ██║██║███████╗█████╗  ██║     ",
-        "██╔══██╗██╔══╝  ██║╚██╗██║██║  ██║██║╚════██║██╔══╝  ██║     ",
-        "██║  ██║███████╗██║ ╚████║██████╔╝██║███████║███████╗╚██████╗"
-    ]
-    
-    start_time = time.time()
-    tick = 0
-    
-    while time.time() - start_time < duration:
-        tick += 0.05
-        matrix.update()
-        
-        colored_ascii = []
-        for line in ascii_rendisec:
-            colored_line = ""
-            for i, char in enumerate(line):
-                if char != ' ':
-                    color = rgb_color(tick, i * 0.1)
-                    colored_line += f"{color}{char}{Style.RESET_ALL}"
-                else:
-                    colored_line += " "
-            colored_ascii.append(colored_line)
-        
-        progress = (time.time() - start_time) / duration
-        dots = "." * (int((time.time() - start_time) * 2) % 4)
-        loading_text = f"LOADING SYSTEM{dots}"
-        loading_color = rgb_color(tick, 2)
-        
-        bar_length = min(30, matrix.width - 20)
-        filled = int(bar_length * progress)
-        bar = "█" * filled + "-" * (bar_length - filled)
-        bar_color = rgb_color(tick, 3)
-        
-        status_color = rgb_color(tick, 4)
-        status_text = "INITIALIZING" if progress < 0.3 else "LOADING" if progress < 0.6 else "PREPARING" if progress < 0.8 else "READY"
-        
-        overlay = [
-            "",
-            *colored_ascii,
-            "",
-            f"{loading_color}{loading_text}{Style.RESET_ALL}",
-            "",
-            f"{bar_color}[{bar}] {int(progress * 100)}%{Style.RESET_ALL}",
-            "",
-            f"{status_color}[ {status_text} ]{Style.RESET_ALL}",
-        ]
-        
-        matrix.render(overlay)
-        time.sleep(0.03)
-    
-    sys.stdout.write('\033[?25h')
-    sys.stdout.flush()
-    time.sleep(1.0)
-
-
+#  Direct Menu Functions
 def menu_search(source_type: str):
-    title = "CARI PROFIL NOMOR (NAMA PEMILIK)" if source_type == "profile" else "CARI TAG NOMOR (NAMA TERSIMPAN)"
-    show_xtols_banner(title)
     store = load_store()
     _, cred = get_cred(store, None)
     raw_phone = input("Masukkan nomor telepon: ").strip()
@@ -446,7 +271,6 @@ def menu_search(source_type: str):
 
 
 def menu_quota():
-    show_xtols_banner("SISA KUOTA AKUN")
     store = load_store()
     name, cred = get_cred(store, None)
     body = api_subscription(cred)
@@ -460,7 +284,6 @@ def menu_quota():
 
 
 def menu_batch():
-    show_xtols_banner("CARI BANYAK NOMOR DARI FILE CSV")
     store = load_store()
     _, cred = get_cred(store, None)
     csv_path = input("Masukkan path file CSV: ").strip()
@@ -499,7 +322,6 @@ def menu_batch():
 
 
 def menu_captcha():
-    show_xtols_banner("BUKA BLOKIR / CAPTCHA")
     store = load_store()
     _, cred = get_cred(store, None)
     common = dict(token=cred["token"], final_key=cred["finalKey"], device_id=cred["clientDeviceId"])
@@ -528,7 +350,6 @@ def menu_captcha():
 
 
 def menu_cred_list():
-    show_xtols_banner("LIHAT/GANTI AKUN TERSIMPAN")
     store = load_store()
     creds = store.get("credentials", {})
     if not creds:
@@ -551,7 +372,6 @@ def menu_cred_list():
 
 
 def menu_generate():
-    show_xtols_banner("TAMBAH AKUN BARU (BUTUH WHATSAPP)")
     raw_phone = input("Masukkan nomor WhatsApp untuk verifikasi (misal 08xxxxxxxx): ").strip()
     phone = normalize_phone(raw_phone)
     device_id = new_device_id()
@@ -664,7 +484,6 @@ def menu_generate():
 
 
 def menu_track_ip():
-    show_xtols_banner("TRACK IP / DOMAIN")
     target = input("Masukkan IP Address atau Domain target (contoh: 8.8.8.8 atau google.com): ").strip()
     if not target:
         print("Target tidak boleh kosong!")
@@ -698,7 +517,6 @@ def menu_track_ip():
 
 
 def menu_track_phone_number():
-    show_xtols_banner("TRACK NOMOR TELEPON (OPERATOR & WILAYAH)")
     number = input("Masukkan nomor telepon Indonesia (contoh: 081234567890): ").strip()
     if not number:
         print("⚠️ Mohon sertakan nomor telepon.")
@@ -785,7 +603,7 @@ def menu_track_phone_number():
 
 
 def menu_track_social():
-    show_xtols_banner("TRACK SOCIAL MEDIA (150+ PLATFORM)")
+    print("\n=== TRACK SOCIAL MEDIA (150+ PLATFORM) ===")
     username = input("Masukkan username target (contoh: johndoe): ").strip()
     if not username:
         print("⚠️ Username tidak boleh kosong.")
@@ -960,14 +778,7 @@ def menu_track_social():
 
 
 def menu_cctv_hack():
-    os.system('clear' if os.name == 'posix' else 'cls')
     print("""
- ██████╗ █████╗ ███╗   ███╗      ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ███████╗
-██╔════╝██╔══██╗████╗ ████║      ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗██╔════╝
-██║     ███████║██╔████╔██║█████╗███████║███████║██║     █████╔╝ █████╗  ██████╔╝███████╗
-██║     ██╔══██║██║╚██╔╝██║╚════╝██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗╚╚╚╚██║
-╚██████╗██║  ██║██║ ╚═╝ ██║      ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║███████║
- ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝           
 ⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE OF THIS TOOL !
                       [+] CCTV HACK SCANNER [+]
 * Author  : RendiSec
@@ -1070,7 +881,6 @@ def menu_cctv_hack():
 
 
 def menu_ai_chat():
-    show_xtols_banner("TANYA CLOUD AI (GEMINI/GPT)")
     prompt = input("Masukkan pertanyaan/pesan untuk Cloud AI (ketik 'keluar' untuk kembali): ").strip()
     if not prompt or prompt.lower() in ("keluar", "q"):
         return
@@ -1114,6 +924,16 @@ def menu_ai_chat():
         print(f"\n[-] Error terhubung ke Cloud AI Endpoint: {str(e)}")
 
 
+BANNER = r"""
+ ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
+╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
+ ╚███╔╝    ██║   ██║   ██║██║     ███████╗
+ ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
+██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
+╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝                                                     
+Tols By RendiSec 
+"""
+
 MENU = [
     ("Cari profil nomor        (nama pemilik)", "profile"),
     ("Cari tag nomor           (nama tersimpan orang lain)", "tags"),
@@ -1141,14 +961,12 @@ def ask(prompt: str) -> str:
 def check_login() -> bool:
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
-        os.system('clear' if os.name == 'posix' else 'cls')
         print(BANNER)
         print("=== AUTENTIKASI LOGIN DIPERLUKAN ===\n")
         password = input("Masukkan sandi login: ").strip()
         if password == LOGIN_PASSWORD:
-            print("\n[+] Login Berhasil!")
-            time.sleep(0.8)
-            matrix_rain_animation()
+            print("\n[+] Login Berhasil! Selamat datang.\n")
+            time.sleep(1)
             return True
         else:
             remaining = max_attempts - attempt
@@ -1163,7 +981,6 @@ def check_login() -> bool:
 
 def interactive() -> int:
     while True:
-        os.system('clear' if os.name == 'posix' else 'cls')
         print(BANNER)
         store = load_store() if CRED_FILE.exists() else {}
         active = store.get("active") or "Belum ada"
@@ -1181,19 +998,17 @@ def interactive() -> int:
             idx = int(choice) - 1
             if not (0 <= idx < len(MENU)):
                 print("Pilihan tidak valid.\n")
-                time.sleep(1)
                 continue
         except ValueError:
             print("Masukkan angka.\n")
-            time.sleep(1)
             continue
 
         action = MENU[idx][1]
         try:
-            if action == "cctvhack":
-                menu_cctv_hack()
-            elif action == "credits":
-                show_xtols_banner("CREDITS PEMBUAT TOOLS")
+            if action == "credits":
+                print("\n" + "=" * 40)
+                print("         CREDITS PEMBUAT TOOLS")
+                print("=" * 40)
                 print("  • RendiSec")
                 print("  • VynnGrup")
                 print("  • PutraWibu")
@@ -1221,16 +1036,21 @@ def interactive() -> int:
                 menu_track_phone_number()
             elif action == "tracksocial":
                 menu_track_social()
+            elif action == "cctvhack":
+                menu_cctv_hack()
             elif action == "cloud_ai":
                 menu_ai_chat()
                 
             input("\nTekan Enter untuk kembali ke menu... ")
+            print("\n" * 2)
         except GtcError as e:
             print(f"\n[Error] {e}")
             input("\nTekan Enter untuk kembali ke menu... ")
+            print("\n" * 2)
         except Exception as e:
             print(f"\n[Unexpected Error] {e}")
             input("\nTekan Enter untuk kembali ke menu... ")
+            print("\n" * 2)
 
 
 def main() -> int:
