@@ -21,7 +21,10 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
+from colorama import init
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+
+init()
 
 #  config
 GTC_BASE = "https://pbssrv-centralevents.com"
@@ -41,7 +44,7 @@ BUNDLE_ID = "app.source.getcontact"
 CARRIER = ("510", "Indosat Ooredoo", "01")
 
 # Konfigurasi Sandi Login
-LOGIN_PASSWORD = "RendiSec123"  # <-- Anda bisa mengubah sandi ini di sini
+LOGIN_PASSWORD = "RendiSec123"
 
 # Cloud Function AI Endpoint
 AI_ENDPOINT = "https://us-central1-ai-chat-bot-bf47e.cloudfunctions.net/chat_function_android"
@@ -185,7 +188,7 @@ def get_cred(store: dict, name: str | None) -> tuple[str, dict]:
     name = name or store.get("active")
     creds = store.get("credentials", {})
     if not name or name not in creds:
-        raise GtcError("Tidak ada akun aktif. Tambahkan/pilih akun terlebih dahulu melalui menu 'Lihat/ganti akun tersimpan' atau 'Tambah akun baru'.")
+        raise GtcError("Tidak ada akun aktif. Tambahkan/pilih akun terlebih dahulu melalui menu.")
     return name, creds[name]
 
 
@@ -241,8 +244,28 @@ def show_captcha(b64_image: str) -> Path:
     return path
 
 
+BANNER = r"""
+ ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
+╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
+ ╚███╔╝    ██║   ██║   ██║██║     ███████╗
+ ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
+██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
+╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝                                                     
+Tols By RendiSec 
+"""
+
+
+# Standard Xtols banner display helper for menus 1-11 and 13
+def show_xtols_banner(title_text: str):
+    os.system('clear' if os.name == 'posix' else 'cls')
+    print(BANNER)
+    print(f"=== {title_text} ===\n")
+
+
 #  Direct Menu Functions
 def menu_search(source_type: str):
+    title = "CARI PROFIL NOMOR (NAMA PEMILIK)" if source_type == "profile" else "CARI TAG NOMOR (NAMA TERSIMPAN)"
+    show_xtols_banner(title)
     store = load_store()
     _, cred = get_cred(store, None)
     raw_phone = input("Masukkan nomor telepon: ").strip()
@@ -266,6 +289,7 @@ def menu_search(source_type: str):
 
 
 def menu_quota():
+    show_xtols_banner("SISA KUOTA AKUN")
     store = load_store()
     name, cred = get_cred(store, None)
     body = api_subscription(cred)
@@ -279,6 +303,7 @@ def menu_quota():
 
 
 def menu_batch():
+    show_xtols_banner("CARI BANYAK NOMOR DARI FILE CSV")
     store = load_store()
     _, cred = get_cred(store, None)
     csv_path = input("Masukkan path file CSV: ").strip()
@@ -317,6 +342,7 @@ def menu_batch():
 
 
 def menu_captcha():
+    show_xtols_banner("BUKA BLOKIR / CAPTCHA")
     store = load_store()
     _, cred = get_cred(store, None)
     common = dict(token=cred["token"], final_key=cred["finalKey"], device_id=cred["clientDeviceId"])
@@ -345,6 +371,7 @@ def menu_captcha():
 
 
 def menu_cred_list():
+    show_xtols_banner("LIHAT/GANTI AKUN TERSIMPAN")
     store = load_store()
     creds = store.get("credentials", {})
     if not creds:
@@ -367,6 +394,7 @@ def menu_cred_list():
 
 
 def menu_generate():
+    show_xtols_banner("TAMBAH AKUN BARU (BUTUH WHATSAPP)")
     raw_phone = input("Masukkan nomor WhatsApp untuk verifikasi (misal 08xxxxxxxx): ").strip()
     phone = normalize_phone(raw_phone)
     device_id = new_device_id()
@@ -423,7 +451,6 @@ def menu_generate():
             print(f"Inisialisasi gagal di {endpoint} (HTTP {code})")
             return
 
-    # VerifyKit
     vfk_call("/v2.0/init", {
         "isCallPermissionGranted": True, "countryCode": "ID", "deviceName": DEVICE_NAME,
         "installedApps": '{"whatsapp":0,"telegram":0,"viber":0}',
@@ -480,6 +507,7 @@ def menu_generate():
 
 
 def menu_track_ip():
+    show_xtols_banner("TRACK IP / DOMAIN")
     target = input("Masukkan IP Address atau Domain target (contoh: 8.8.8.8 atau google.com): ").strip()
     if not target:
         print("Target tidak boleh kosong!")
@@ -513,6 +541,7 @@ def menu_track_ip():
 
 
 def menu_track_phone_number():
+    show_xtols_banner("TRACK NOMOR TELEPON (OPERATOR & WILAYAH)")
     number = input("Masukkan nomor telepon Indonesia (contoh: 081234567890): ").strip()
     if not number:
         print("⚠️ Mohon sertakan nomor telepon.")
@@ -599,6 +628,7 @@ def menu_track_phone_number():
 
 
 def menu_track_social():
+    show_xtols_banner("TRACK SOCIAL MEDIA (150+ PLATFORM)")
     username = input("Masukkan username target (contoh: johndoe): ").strip()
     if not username:
         print("⚠️ Username tidak boleh kosong.")
@@ -734,6 +764,7 @@ def menu_track_social():
         "Webflow": "https://webflow.com/{}",
         "Weebly": "https://{}.weebly.com",
         "Wikimedia": "https://meta.wikimedia.org/wiki/User:{}",
+        "WordPress": "https://{}.wordpress.com",
         "Xbox": "https://xboxgamertag.com/search/{}",
         "YouPic": "https://youpic.com/photographer/{}",
         "Zapier": "https://zapier.com/app/s/{}",
@@ -771,7 +802,138 @@ def menu_track_social():
     print(f"\n✨ Selesai! Ditemukan di {len(found_results)} dari {len(platforms)} platform.")
 
 
+def menu_cctv_hack():
+    # KHUSUS MENU NO 12 MENGGUNAKAN BANNER CAM HACK
+    os.system('clear' if os.name == 'posix' else 'cls')
+    print("""
+\033[1;31m\033[1;37m ██████╗ █████╗ ███╗   ███╗      ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ███████╗
+██╔════╝██╔══██╗████╗ ████║      ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗██╔════╝
+██║     ███████║██╔████╔██║█████╗███████║███████║██║     █████╔╝ █████╗  ██████╔╝███████╗
+██║     ██╔══██║██║╚██╔╝██║╚════╝██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗╚╚╚╚██║
+╚██████╗██║  ██║██║ ╚═╝ ██║      ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║███████║
+\033[1;31m ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝           
+⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE OF THIS TOOL !
+                      [+] CCTV HACK SCANNER [+]
+* Author  : RendiSec
+* GitHub  : https://github.com/RendiSec/Xtols
+\033[1;31m                                                                         
+\033[1;31m1) \033[1;37mUnited States                \033[1;31m31) \033[1;37mMexico                \033[1;31m61) \033[1;31mMoldova
+\033[1;31m2) \033[1;37mJapan                        \033[1;31m32) \033[1;37mFinland               \033[1;31m62) \033[1;31mNicaragua
+\033[1;31m3) \033[1;37mItaly                        \033[1;31m33) \033[1;37mChina                 \033[1;31m63) \033[1;31mMalta
+\033[1;31m4) \033[1;37mKorea                        \033[1;31m34) \033[1;37mChile                 \033[1;31m64) \033[1;31mTrinidad And Tobago
+\033[1;31m5) \033[1;37mFrance                       \033[1;31m35) \033[1;37mSouth Africa          \033[1;31m65) \033[1;31mSaudi Arabia
+\033[1;31m6) \033[1;37mGermany                      \033[1;31m36) \033[1;37mSlovakia              \033[1;31m66) \033[1;31mCroatia
+\033[1;31m7) \033[1;37mTaiwan                       \033[1;31m37) \033[1;37mHungary               \033[1;31m67) \033[1;31mCyprus
+\033[1;31m8) \033[1;37mRussian Federation           \033[1;31m38) \033[1;37mIreland               \033[1;31m68) \033[1;31mPakistan
+\033[1;31m9) \033[1;37mUnited Kingdom               \033[1;31m39) \033[1;31mEgypt                 \033[1;31m69) \033[1;31mUnited Arab Emirates
+\033[1;31m10) \033[1;37mNetherlands                 \033[1;31m40) \033[1;31mThailand              \033[1;31m70) \033[1;31mKazakhstan
+\033[1;31m11) \033[1;37mCzech Republic              \033[1;31m41) \033[1;31mUkraine               \033[1;31m71) \033[1;31mKuwait
+\033[1;31m12) \033[1;37mTurkey                      \033[1;31m42) \033[1;31mSerbia                \033[1;31m72) \033[1;31mVenezuela
+\033[1;31m13) \033[1;37mAustria                     \033[1;31m43) \033[1;31mHong Kong             \033[1;31m73) \033[1;31mGeorgia
+\033[1;31m14) \033[1;37mSwitzerland                 \033[1;31m44) \033[1;31mGreece                \033[1;31m74) \033[1;31mMontenegro
+\033[1;31m15) \033[1;37mSpain                       \033[1;31m45) \033[1;31mPortugal              \033[1;31m75) \033[1;31mEl Salvador
+\033[1;31m16) \033[1;37mCanada                      \033[1;31m46) \033[1;31mLatvia                \033[1;31m76) \033[1;31mLuxembourg
+\033[1;31m17) \033[1;37mSweden                      \033[1;31m47) \033[1;31mSingapore             \033[1;31m77) \033[1;31mCuracao
+\033[1;31m18) \033[1;37mIsrael                      \033[1;31m48) \033[1;31mIceland               \033[1;31m78) \033[1;31mPuerto Rico
+\033[1;31m19) \033[1;37mIran                        \033[1;31m49) \033[1;31mMalaysia              \033[1;31m79) \033[1;31mCosta Rica
+\033[1;31m20) \033[1;37mPoland                      \033[1;31m50) \033[1;31mColombia              \033[1;31m80) \033[1;31mBelarus
+\033[1;31m21) \033[1;37mIndia                       \033[1;31m51) \033[1;31mTunisia               \033[1;31m81) \033[1;31mAlbania
+\033[1;31m22) \033[1;37mNorway                      \033[1;31m52) \033[1;31mEstonia               \033[1;31m82) \033[1;31mLiechtenstein
+\033[1;31m23) \033[1;37mRomania                     \033[1;31m53) \033[1;31mDominican Republic    \033[1;31m83) \033[1;31mBosnia And Herzegovia
+\033[1;31m24) \033[1;37mViet Nam                    \033[1;31m54) \033[1;31mSlovenia              \033[1;31m84) \033[1;31mParaguay
+\033[1;31m25) \033[1;37mBelgium                     \033[1;31m55) \033[1;31mEcuador               \033[1;31m85) \033[1;31mPhilippines
+\033[1;31m26) \033[1;37mBrazil                      \033[1;31m56) \033[1;31mLithuania             \033[1;31m86) \033[1;37mFaroe Islands
+\033[1;31m27) \033[1;37mBulgaria                    \033[1;31m57) \033[1;31mPalestinian           \033[1;31m87) \033[1;37mGuatemala
+\033[1;31m28) \033[1;37mIndonesia                   \033[1;31m58) \033[1;31mNew Zealand           \033[1;31m88) \033[1;37mNepal
+\033[1;31m29) \033[1;37mDenmark                     \033[1;31m59) \033[1;31mBangladesh            \033[1;31m89) \033[1;31mPeru
+\033[1;31m30) \033[1;37mArgentina                   \033[1;31m60) \033[1;31mPanama                \033[1;31m90) \033[1;31mUruguay
+\033[1;31m91) \033[1;37mExtra                       \033[1;31m92) \033[1;31mAndorra               \033[1;31m93) \033[1;31mAntigua And Barbuda
+\033[1;31m94) \033[1;37mArmenia                     \033[1;31m95) \033[1;37mAngola                \033[1;31m96) \033[1;37mAustralia
+\033[1;31m97) \033[1;37mAruba                       \033[1;31m98) \033[1;31mAzerbaijan            \033[1;31m99) \033[1;31mBarbados
+\033[1;31m100) \033[1;37mBonaire                    \033[1;31m101) \033[1;37mBahamas              \033[1;31m102) \033[1;37mBotswana
+\033[1;31m103) \033[1;37mCongo                      \033[1;31m104) \033[1;37mIvory Coast          \033[1;31m105) \033[1;37mAlgeria
+\033[1;31m106) \033[1;37mFiji                       \033[1;31m107) \033[1;31mGabon                \033[1;31m108) \033[1;37mGuernsey
+\033[1;31m109) \033[1;37mGreenland                  \033[1;31m110) \033[1;31mGuadeloupe           \033[1;31m111) \033[1;37mGuam
+\033[1;31m112) \033[1;37mGuyana                     \033[1;31m113) \033[1;31mHonduras             \033[1;31m114) \033[1;31mJersey
+\033[1;31m115) \033[1;37mJamaica                    \033[1;31m116) \033[1;31mJordan               \033[1;31m117) \033[1;31mKenya
+\033[1;31m118) \033[1;37mCambodia                   \033[1;31m119) \033[1;31mSaint Kitts          \033[1;31m120) \033[1;31mCayman Islands
+\033[1;31m121) \033[1;37mLaos                       \033[1;31m122) \033[1;31mLebanon              \033[1;31m123) \033[1;31mSri Lanka
+\033[1;31m124) \033[1;37mMorocco                    \033[1;31m125) \033[1;31mMadagascar           \033[1;31m126) \033[1;31mMacedonia
+\033[1;31m127) \033[1;37mMongolia                   \033[1;31m128) \033[1;31mMacao                \033[1;31m129) \033[1;31mMartinique
+\033[1;31m130) \033[1;37mMauritius                  \033[1;31m131) \033[1;31mNamibia              \033[1;31m132) \033[1;31mNew Caledonia
+\033[1;31m133) \033[1;37mNigeria                    \033[1;31m134) \033[1;31mQatar                \033[1;31m135) \033[1;31mReunion
+\033[1;31m136) \033[1;37mSudan                      \033[1;31m137) \033[1;31mSenegal              \033[1;31m138) \033[1;31mSuriname
+\033[1;31m139) \033[1;37mSao Tome And Principe      \033[1;31m140) \033[1;31mSyria                \033[1;31m141) \033[1;31mTanzania
+\033[1;31m142) \033[1;37mUganda                     \033[1;31m143) \033[1;31mUzbekistan           \033[1;31m144) \033[1;31mSaint Vincent And The Grenadines
+\033[1;31m145) \033[1;37mBenin
+""")
+    try:
+        countries = ["US", "JP", "IT", "KR", "FR", "DE", "TW", "RU", "GB", "NL",
+                     "CZ", "TR", "AT", "CH", "ES", "CA", "SE", "IL", "PL", "IR",
+                     "NO", "RO", "IN", "VN", "BE", "BR", "BG", "ID", "DK", "AR",
+                     "MX", "FI", "CN", "CL", "ZA", "SK", "HU", "IE", "EG", "TH",
+                     "UA", "RS", "HK", "GR", "PT", "LV", "SG", "IS", "MY", "CO",
+                     "TN", "EE", "DO", "SI", "EC", "LT", "PS", "NZ", "BD", "PA",
+                     "MD", "NI", "MT", "TT", "SA", "HR", "CY", "PK", "AE", "KZ",
+                     "KW", "VE", "GE", "ME", "SV", "LU", "CW", "PR", "CR", "BY",
+                     "AL", "LI", "BA", "PY", "PH", "FO", "GT", "NP", "PE", "UY",
+                     "-" , "AD", "AG", "AM", "AO", "AU", "AW", "AZ", "BB",
+                     "BQ", "BS", "BW", "CG", "CI", "DZ", "FJ", "GA", "GG", "GL",
+                     "GP", "GU", "GY", "HN", "JE", "JM", "JO", "KE", "KH", "KN",
+                     "KY", "LA", "LB", "LK", "MA", "MG", "MK", "MN", "MO", "MQ",
+                     "MU", "NA", "NC", "NG", "QA", "RE", "SD", "SN", "SR", "ST",
+                     "SY", "TZ", "UG", "UZ", "VC", "BJ"]
+        
+        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:68.0) Gecko/20100101 Firefox/68.0"}
+
+        num_input = input("\033[1;32mOPTIONS : \033[1;37m").strip()
+        if not num_input.isdigit():
+            print("\033[1;31m[-] Input harus berupa angka.\033[1;37m")
+            return
+
+        num = int(num_input)
+        if num not in range(1, len(countries) + 1):
+            print("\033[1;31m[-] Pilihan negara tidak valid.\033[1;37m")
+            return
+
+        country = countries[num - 1]
+        print(f"\n\033[1;33m[+] Searching for streams in country: {country}...\033[1;37m\n")
+
+        res = requests.get(f"http://www.insecam.org/en/bycountry/{country}", headers=headers, timeout=10)
+        match_pages = re.findall(r'pagenavigator\("\?page=", (\d+)', res.text)
+        if not match_pages:
+            print("\033[1;31m[-] No pages found or country code invalid.\033[1;37m")
+            return
+            
+        last_page = int(match_pages[0])
+        print(f"\033[1;32m[+] Total pages found: {last_page}\033[1;37m")
+        
+        filename = f"cctv_links_{country}.txt"
+        found_count = 0
+
+        with open(filename, "w") as f:
+            for page in range(1, last_page + 1):
+                print(f"\033[1;36m[i] Scanning page {page}/{last_page}...\033[1;37m")
+                page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country}/?page={page}", headers=headers, timeout=10)
+                find_ip = re.findall(r"http://\d+.\d+.\d+.\d+:\d+", page_res.text)
+                
+                for ip in set(find_ip):
+                    try:
+                        check = requests.get(ip, headers=headers, timeout=2)
+                        if check.status_code == 200:
+                            print(f"\033[1;32m[LIVE] {ip}\033[1;37m")
+                            f.write(ip + "\n")
+                            found_count += 1
+                    except:
+                        continue
+
+        print(f"\n\033[1;32m[+] Done! Saved {found_count} active links to {filename}\033[1;37m")
+    except Exception as e:
+        print(f"\n\033[1;31m[-] Error: {e}\033[1;37m")
+
+
 def menu_ai_chat():
+    show_xtols_banner("TANYA CLOUD AI (GEMINI/GPT)")
     prompt = input("Masukkan pertanyaan/pesan untuk Cloud AI (ketik 'keluar' untuk kembali): ").strip()
     if not prompt or prompt.lower() in ("keluar", "q"):
         return
@@ -815,16 +977,6 @@ def menu_ai_chat():
         print(f"\n[-] Error terhubung ke Cloud AI Endpoint: {str(e)}")
 
 
-BANNER = r"""
- ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
-╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
- ╚███╔╝    ██║   ██║   ██║██║     ███████╗
- ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
-██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
-╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝                                                     
-Tols By RendiSec 
-"""
-
 MENU = [
     ("Cari profil nomor        (nama pemilik)", "profile"),
     ("Cari tag nomor           (nama tersimpan orang lain)", "tags"),
@@ -837,6 +989,7 @@ MENU = [
     ("Track IP / Domain", "trackip"),
     ("Track Nomor Telepon (Operator & Wilayah)", "trackphone"),
     ("Track Social Media (150+ Platform)", "tracksocial"),
+    ("CCTV Hack Scanner (Insecam)", "cctvhack"),
     ("Tanya Cloud AI (Gemini/GPT)", "cloud_ai"),
 ]
 
@@ -851,6 +1004,7 @@ def ask(prompt: str) -> str:
 def check_login() -> bool:
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
+        os.system('clear' if os.name == 'posix' else 'cls')
         print(BANNER)
         print("=== AUTENTIKASI LOGIN DIPERLUKAN ===\n")
         password = input("Masukkan sandi login: ").strip()
@@ -871,6 +1025,7 @@ def check_login() -> bool:
 
 def interactive() -> int:
     while True:
+        os.system('clear' if os.name == 'posix' else 'cls')
         print(BANNER)
         store = load_store() if CRED_FILE.exists() else {}
         active = store.get("active") or "Belum ada"
@@ -888,17 +1043,19 @@ def interactive() -> int:
             idx = int(choice) - 1
             if not (0 <= idx < len(MENU)):
                 print("Pilihan tidak valid.\n")
+                time.sleep(1)
                 continue
         except ValueError:
             print("Masukkan angka.\n")
+            time.sleep(1)
             continue
 
         action = MENU[idx][1]
         try:
-            if action == "credits":
-                print("\n" + "=" * 40)
-                print("         CREDITS PEMBUAT TOOLS")
-                print("=" * 40)
+            if action == "cctvhack":
+                menu_cctv_hack()
+            elif action == "credits":
+                show_xtols_banner("CREDITS PEMBUAT TOOLS")
                 print("  • RendiSec")
                 print("  • VynnGrup")
                 print("  • PutraWibu")
@@ -930,15 +1087,12 @@ def interactive() -> int:
                 menu_ai_chat()
                 
             input("\nTekan Enter untuk kembali ke menu... ")
-            print("\n" * 2)
         except GtcError as e:
             print(f"\n[Error] {e}")
             input("\nTekan Enter untuk kembali ke menu... ")
-            print("\n" * 2)
         except Exception as e:
             print(f"\n[Unexpected Error] {e}")
             input("\nTekan Enter untuk kembali ke menu... ")
-            print("\n" * 2)
 
 
 def main() -> int:
