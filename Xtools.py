@@ -17,6 +17,7 @@ import sys
 import tempfile
 import time
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
@@ -597,6 +598,179 @@ def menu_track_phone_number():
 - Status: {status_text}""")
 
 
+def menu_track_social():
+    username = input("Masukkan username target (contoh: johndoe): ").strip()
+    if not username:
+        print("⚠️ Username tidak boleh kosong.")
+        return
+
+    platforms = {
+        "Instagram": "https://www.instagram.com/{}",
+        "TikTok": "https://www.tiktok.com/@{}",
+        "Twitter / X": "https://twitter.com/{}",
+        "GitHub": "https://github.com/{}",
+        "Facebook": "https://www.facebook.com/{}",
+        "YouTube": "https://www.youtube.com/@{}",
+        "Pinterest": "https://www.pinterest.com/{}",
+        "LinkedIn": "https://www.linkedin.com/in/{}",
+        "Telegram": "https://t.me/{}",
+        "Reddit": "https://www.reddit.com/user/{}",
+        "Medium": "https://medium.com/@{}",
+        "Twitch": "https://www.twitch.tv/{}",
+        "SoundCloud": "https://soundcloud.com/{}",
+        "Spotify": "https://open.spotify.com/user/{}",
+        "Steam": "https://steamcommunity.com/id/{}",
+        "Snapchat": "https://www.snapchat.com/add/{}",
+        "Behance": "https://www.behance.net/{}",
+        "Dribbble": "https://dribbble.com/{}",
+        "Flickr": "https://www.flickr.com/people/{}",
+        "Vimeo": "https://vimeo.com/{}",
+        "VK": "https://vk.com/{}",
+        "About.me": "https://about.me/{}",
+        "Academia.edu": "https://independent.academia.edu/{}",
+        "AngelList": "https://angel.co/u/{}",
+        "Bitchute": "https://www.bitchute.com/channel/{}",
+        "Blogger": "https://{}.blogspot.com",
+        "Codecademy": "https://www.codecademy.com/profiles/{}",
+        "Codepen": "https://codepen.io/{}",
+        "Dev.to": "https://dev.to/{}",
+        "Disqus": "https://disqus.com/by/{}",
+        "Ebay": "https://www.ebay.com/usr/{}",
+        "Fandom": "https://www.fandom.com/u/{}",
+        "Fiverr": "https://www.fiverr.com/{}",
+        "Goodreads": "https://www.goodreads.com/{}",
+        "Gravatar": "https://en.gravatar.com/{}",
+        "HackerNews": "https://news.ycombinator.com/user?id={}",
+        "Imdb": "https://www.imdb.com/user/u{}/",
+        "Itch.io": "https://{}.itch.io",
+        "Kaggle": "https://www.kaggle.com/{}",
+        "Last.fm": "https://www.last.fm/user/{}",
+        "Lichess": "https://lichess.org/@/{}",
+        "MyAnimeList": "https://myanimelist.net/profile/{}",
+        "Patreon": "https://www.patreon.com/{}",
+        "PayPal": "https://www.paypal.com/paypalme/{}",
+        "Periscope": "https://www.pscp.tv/{}",
+        "ProductHunt": "https://www.producthunt.com/@{}",
+        "Quora": "https://www.quora.com/profile/{}",
+        "Roblox": "https://www.roblox.com/user.aspx?username={}",
+        "Slack": "https://{}.slack.com",
+        "Slideshare": "https://www.slideshare.net/{}",
+        "Smule": "https://www.smule.com/{}",
+        "Substack": "https://{}.substack.com",
+        "TripAdvisor": "https://www.tripadvisor.com/members/{}",
+        "Tumblr": "https://{}.tumblr.com",
+        "Vero": "https://vero.co/{}",
+        "Wattpad": "https://www.wattpad.com/user/{}",
+        "Wikipedia": "https://en.wikipedia.org/wiki/User:{}",
+        "Wix": "https://{}.wixsite.com",
+        "WordPress": "https://{}.wordpress.com",
+        "Xing": "https://www.xing.com/profile/{}",
+        "Yelp": "https://www.yelp.com/user_details?userid={}",
+        "YouPic": "https://youpic.com/photographer/{}",
+        "Zotero": "https://www.zotero.org/{}",
+        "500px": "https://500px.com/{}",
+        "9GAG": "https://9gag.com/u/{}",
+        "Bandcamp": "https://bandcamp.com/{}",
+        "Bento": "https://bento.me/{}",
+        "BuyMeACoffee": "https://buymeacoffee.com/{}",
+        "Canva": "https://www.canva.com/{}",
+        "Carrd": "https://{}.carrd.co",
+        "CashApp": "https://cash.app/{}",
+        "Chess.com": "https://www.chess.com/member/{}",
+        "Clubhouse": "https://www.clubhouse.com/@{}",
+        "Couchsurfing": "https://www.couchsurfing.com/people/{}",
+        "Crates.io": "https://crates.io/users/{}",
+        "DailyMotion": "https://www.dailymotion.com/{}",
+        "DeviantArt": "https://www.deviantart.com/{}",
+        "Discord": "https://discord.com/users/{}",
+        "Duolingo": "https://www.duolingo.com/profile/{}",
+        "EyeEm": "https://www.eyeem.com/u/{}",
+        "Figma": "https://www.figma.com/@{}",
+        "Flipboard": "https://flipboard.com/@{}",
+        "FortniteTracker": "https://fortnitetracker.com/profile/all/{}",
+        "FreeCodeCamp": "https://www.freecodecamp.org/{}",
+        "Genius": "https://genius.com/{}",
+        "Giphy": "https://giphy.com/{}",
+        "Gumroad": "https://gumroad.com/{}",
+        "HackTheBox": "https://app.hackthebox.com/profile/{}",
+        "HuggingFace": "https://huggingface.co/{}",
+        "Imgur": "https://imgur.com/user/{}",
+        "Issuu": "https://issuu.com/{}",
+        "Kofi": "https://ko-fi.com/{}",
+        "Kongregate": "https://www.kongregate.com/accounts/{}",
+        "Launchpad": "https://launchpad.net/~{}",
+        "Letterboxd": "https://letterboxd.com/{}",
+        "LiveJournal": "https://{}.livejournal.com",
+        "Mastodon": "https://mastodon.social/@{}",
+        "Mercari": "https://www.mercari.com/u/{}",
+        "Mixcloud": "https://www.mixcloud.com/{}",
+        "Musescore": "https://musescore.com/{}",
+        "Myspace": "https://myspace.com/{}",
+        "Npm": "https://www.npmjs.com/~{}",
+        "OpenCollective": "https://opencollective.com/{}",
+        "OpenSea": "https://opensea.io/{}",
+        "Odysee": "https://odysee.com/@{}",
+        "Packagist": "https://packagist.org/users/{}",
+        "Pypi": "https://pypi.org/user/{}",
+        "ReverbNation": "https://www.reverbNation.com/{}",
+        "Rumble": "https://rumble.com/user/{}",
+        "Scratch": "https://scratch.mit.edu/users/{}",
+        "Scribd": "https://www.scribd.com/{}",
+        "Shutterstock": "https://www.shutterstock.com/g/{}",
+        "Slackers": "https://slackers.club/{}",
+        "Songkick": "https://www.songkick.com/users/{}",
+        "SourceForge": "https://sourceforge.net/u/{}",
+        "Splice": "https://splice.com/{}",
+        "Strava": "https://www.strava.com/athletes/{}",
+        "Tidal": "https://tidal.com/{}",
+        "Trello": "https://trello.com/{}",
+        "TribalHost": "https://tribalhost.com/{}",
+        "Trip": "https://www.trip.com/{}",
+        "TryHackMe": "https://tryhackme.com/p/{}",
+        "UltimateGuitar": "https://www.ultimate-guitar.com/u/{}",
+        "Unsplash": "https://unsplash.com/@{}",
+        "Venmo": "https://venmo.com/{}",
+        "Vivino": "https://www.vivino.com/users/{}",
+        "Webflow": "https://webflow.com/{}",
+        "Weebly": "https://{}.weebly.com",
+        "Wikimedia": "https://meta.wikimedia.org/wiki/User:{}",
+        "Xbox": "https://xboxgamertag.com/search/{}",
+        "YouPic": "https://youpic.com/photographer/{}",
+        "Zapier": "https://zapier.com/app/s/{}",
+        "Zenn": "https://zenn.dev/{}",
+        "ZoomInfo": "https://www.zoominfo.com/p/{}",
+        "Zomato": "https://www.zomato.com/u/{}"
+    }
+
+    print(f"\n🔍 Memeriksa ketersediaan username '{username}' di {len(platforms)} platform secara paralel...\n")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    }
+
+    found_results = []
+
+    def check_platform(name, url_template):
+        url = url_template.format(username)
+        try:
+            res = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+            if res.status_code == 200:
+                return (name, url, True)
+        except Exception:
+            pass
+        return (name, url, False)
+
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        futures = {executor.submit(check_platform, name, url): name for name, url in platforms.items()}
+        for future in as_completed(futures):
+            name, url, is_found = future.result()
+            if is_found:
+                print(f"[+] Ditemukan ({name}): {url}")
+                found_results.append((name, url))
+
+    print(f"\n✨ Selesai! Ditemukan di {len(found_results)} dari {len(platforms)} platform.")
+
+
 def menu_ai_chat():
     prompt = input("Masukkan pertanyaan/pesan untuk Cloud AI (ketik 'keluar' untuk kembali): ").strip()
     if not prompt or prompt.lower() in ("keluar", "q"):
@@ -620,7 +794,6 @@ def menu_ai_chat():
         response.raise_for_status()
         res_json = response.json()
         
-        # Mengambil teks jawaban langsung dari jalur hasil respons server AI
         answer = None
         choice = dig(res_json, "result.choices.0")
         if choice:
@@ -663,6 +836,7 @@ MENU = [
     ("Credits Pembuat Tools", "credits"),
     ("Track IP / Domain", "trackip"),
     ("Track Nomor Telepon (Operator & Wilayah)", "trackphone"),
+    ("Track Social Media (150+ Platform)", "tracksocial"),
     ("Tanya Cloud AI (Gemini/GPT)", "cloud_ai"),
 ]
 
@@ -750,6 +924,8 @@ def interactive() -> int:
                 menu_track_ip()
             elif action == "trackphone":
                 menu_track_phone_number()
+            elif action == "tracksocial":
+                menu_track_social()
             elif action == "cloud_ai":
                 menu_ai_chat()
                 
