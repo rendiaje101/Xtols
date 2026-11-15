@@ -16,17 +16,19 @@ import subprocess
 import sys
 import tempfile
 import time
+import math
+import shutil
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
-from colorama import init
+from colorama import init, Fore, Style
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 
-init()
+init(autoreset=True)
 
-#  config
+# Konfigurasi Dasar
 GTC_BASE = "https://pbssrv-centralevents.com"
 VFK_BASE = "https://api.verifykit.com"
 HMAC_KEY = "31426764382a642f3a6665497235466f3d236d5d785b722b4c657457442a495b494524324866782a2364292478587a78662d7a7b7578593f71703e2b7e365762"
@@ -43,7 +45,7 @@ TIME_ZONE = "Asia/Bangkok"
 BUNDLE_ID = "app.source.getcontact"
 CARRIER = ("510", "Indosat Ooredoo", "01")
 
-# Konfigurasi Sandi Login
+# Sandi Login Tool
 LOGIN_PASSWORD = "RendiSec123"
 
 # Cloud Function AI Endpoint
@@ -62,7 +64,7 @@ class GtcError(Exception):
     pass
 
 
-#  crypto
+# Enkripsi & Dekripsi
 def _sig(ts: str, message: str, key_hex: str) -> str:
     mac = hmac.new(bytes.fromhex(key_hex), f"{ts}-{message}".encode(), hashlib.sha256)
     return base64.b64encode(mac.digest()).decode()
@@ -79,7 +81,7 @@ def encrypt(data: str, key_hex: str) -> str:
 
 
 def decrypt(data: str, key_hex: str) -> str:
-    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).decryptor()
+    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).encryptor()
     out = dec.update(base64.b64decode(data)) + dec.finalize()
     return out[: -out[-1]].decode()
 
@@ -101,7 +103,6 @@ def new_device_id() -> str:
     return secrets.token_hex(8)
 
 
-#  http
 def _post(url: str, body: str, headers: dict, timeout: int = 25) -> requests.Response:
     return requests.post(url, data=body, headers=headers, timeout=timeout)
 
@@ -168,7 +169,6 @@ def dig(obj, path, default=None):
     return obj
 
 
-#  store
 def load_store() -> dict:
     if not CRED_FILE.exists():
         return {"active": None, "credentials": {}}
@@ -203,7 +203,6 @@ def normalize_phone(raw: str) -> str:
     raise GtcError(f"Invalid phone number: {raw}")
 
 
-#  features logic
 def api_search(cred: dict, phone: str, source: str) -> dict:
     endpoint = "/v2.8/number-detail" if source == "tags" else "/v2.8/search"
     payload = {
@@ -255,14 +254,172 @@ Tols By RendiSec
 """
 
 
-# Standard Xtols banner display helper for menus 1-11 and 13
 def show_xtols_banner(title_text: str):
     os.system('clear' if os.name == 'posix' else 'cls')
     print(BANNER)
     print(f"=== {title_text} ===\n")
 
 
-#  Direct Menu Functions
+def rgb_color(tick, offset=0):
+    r = int((math.sin(tick * 0.5 + offset) + 1) * 127)
+    g = int((math.sin(tick * 0.5 + offset + 2) + 1) * 127)
+    b = int((math.sin(tick * 0.5 + offset + 4) + 1) * 127)
+    return f"\033[38;2;{r};{g};{b}m"
+
+
+class MatrixBackground:
+    def __init__(self):
+        try:
+            self.width = shutil.get_terminal_size().columns
+            self.height = shutil.get_terminal_size().lines
+        except:
+            self.width = 80
+            self.height = 24
+        
+        self.width = max(40, self.width)
+        self.height = max(10, self.height)
+        
+        self.columns = []
+        self.chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()'
+        self.init_columns()
+    
+    def init_columns(self):
+        self.columns = []
+        for x in range(self.width):
+            length = random.randint(8, 25)
+            col = {
+                'x': x,
+                'y': random.randint(-self.height, 0),
+                'speed': random.uniform(0.8, 2.5),
+                'length': length,
+                'chars': [random.choice(self.chars) for _ in range(length)],
+                'bright_pos': random.randint(0, length-1)
+            }
+            self.columns.append(col)
+    
+    def update(self):
+        for col in self.columns:
+            col['y'] += col['speed'] * 0.6
+            
+            if col['y'] > self.height + col['length']:
+                col['y'] = random.randint(-self.height, 0)
+                col['length'] = random.randint(8, 25)
+                col['chars'] = [random.choice(self.chars) for _ in range(col['length'])]
+                col['speed'] = random.uniform(0.8, 2.5)
+                col['bright_pos'] = random.randint(0, col['length']-1)
+            
+            if random.random() < 0.03:
+                for i in range(len(col['chars'])):
+                    if random.random() < 0.3:
+                        col['chars'][i] = random.choice(self.chars)
+    
+    def render(self, overlay_lines=None):
+        sys.stdout.write('\033[?25l')
+        sys.stdout.write('\033[H')
+        
+        screen = []
+        for y in range(self.height):
+            screen.append([' ' for _ in range(self.width)])
+        
+        for col in self.columns:
+            x = col['x']
+            start_y = int(col['y'])
+            
+            for i in range(col['length']):
+                y = start_y + i
+                if 0 <= y < self.height and 0 <= x < self.width:
+                    char = col['chars'][i % len(col['chars'])]
+                    
+                    if i == col['bright_pos']:
+                        color = Fore.GREEN + Style.BRIGHT
+                    elif i < col['bright_pos'] + 4 and i > col['bright_pos'] - 2:
+                        color = Fore.GREEN
+                    else:
+                        color = Fore.GREEN + Style.DIM
+                    
+                    screen[y][x] = color + char + Style.RESET_ALL
+        
+        for y in range(self.height):
+            print(''.join(screen[y]))
+        
+        if overlay_lines:
+            filtered = [line for line in overlay_lines if line.strip()]
+            overlay_height = len(filtered)
+            start_y = (self.height - overlay_height) // 2
+            
+            for i, line in enumerate(filtered):
+                if line.strip():
+                    clean_line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+                    x_pos = (self.width - len(clean_line)) // 2
+                    if x_pos < 0:
+                        x_pos = 0
+                    sys.stdout.write(f'\033[{start_y + i};{x_pos}H')
+                    print(line, end='')
+        
+        sys.stdout.write('\033[?25h')
+
+
+def matrix_rain_animation(duration=3.5):
+    matrix = MatrixBackground()
+    
+    ascii_rendisec = [
+        "██████╗ ███████╗███╗   ██╗██████╗ ██╗███████╗███████╗ ██████╗",
+        "██╔══██╗██╔════╝████╗  ██║██╔══██╗██║██╔════╝██╔════╝██╔════╝",
+        "██████╔╝█████╗  ██╔██╗ ██║██║  ██║██║███████╗█████╗  ██║     ",
+        "██╔══██╗██╔══╝  ██║╚██╗██║██║  ██║██║╚════██║██╔══╝  ██║     ",
+        "██║  ██║███████╗██║ ╚████║██████╔╝██║███████║███████╗╚██████╗"
+    ]
+    
+    start_time = time.time()
+    tick = 0
+    
+    while time.time() - start_time < duration:
+        tick += 0.05
+        matrix.update()
+        
+        colored_ascii = []
+        for line in ascii_rendisec:
+            colored_line = ""
+            for i, char in enumerate(line):
+                if char != ' ':
+                    color = rgb_color(tick, i * 0.1)
+                    colored_line += f"{color}{char}{Style.RESET_ALL}"
+                else:
+                    colored_line += " "
+            colored_ascii.append(colored_line)
+        
+        progress = (time.time() - start_time) / duration
+        dots = "." * (int((time.time() - start_time) * 2) % 4)
+        loading_text = f"LOADING SYSTEM{dots}"
+        loading_color = rgb_color(tick, 2)
+        
+        bar_length = min(30, matrix.width - 20)
+        filled = int(bar_length * progress)
+        bar = "█" * filled + "-" * (bar_length - filled)
+        bar_color = rgb_color(tick, 3)
+        
+        status_color = rgb_color(tick, 4)
+        status_text = "INITIALIZING" if progress < 0.3 else "LOADING" if progress < 0.6 else "PREPARING" if progress < 0.8 else "READY"
+        
+        overlay = [
+            "",
+            *colored_ascii,
+            "",
+            f"{loading_color}{loading_text}{Style.RESET_ALL}",
+            "",
+            f"{bar_color}[{bar}] {int(progress * 100)}%{Style.RESET_ALL}",
+            "",
+            f"{status_color}[ {status_text} ]{Style.RESET_ALL}",
+        ]
+        
+        matrix.render(overlay)
+        time.sleep(0.03)
+    
+    sys.stdout.write('\033[?25h')
+    sys.stdout.flush()
+    time.sleep(1.0)
+
+
 def menu_search(source_type: str):
     title = "CARI PROFIL NOMOR (NAMA PEMILIK)" if source_type == "profile" else "CARI TAG NOMOR (NAMA TERSIMPAN)"
     show_xtols_banner(title)
@@ -803,69 +960,49 @@ def menu_track_social():
 
 
 def menu_cctv_hack():
-    # KHUSUS MENU NO 12 MENGGUNAKAN BANNER CAM HACK
     os.system('clear' if os.name == 'posix' else 'cls')
     print("""
-\033[1;31m\033[1;37m ██████╗ █████╗ ███╗   ███╗      ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ███████╗
+ ██████╗ █████╗ ███╗   ███╗      ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ███████╗
 ██╔════╝██╔══██╗████╗ ████║      ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗██╔════╝
 ██║     ███████║██╔████╔██║█████╗███████║███████║██║     █████╔╝ █████╗  ██████╔╝███████╗
 ██║     ██╔══██║██║╚██╔╝██║╚════╝██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗╚╚╚╚██║
 ╚██████╗██║  ██║██║ ╚═╝ ██║      ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║███████║
-\033[1;31m ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝           
+ ╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝           
 ⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE OF THIS TOOL !
                       [+] CCTV HACK SCANNER [+]
 * Author  : RendiSec
 * GitHub  : https://github.com/RendiSec/Xtols
-\033[1;31m                                                                         
-\033[1;31m1) \033[1;37mUnited States                \033[1;31m31) \033[1;37mMexico                \033[1;31m61) \033[1;31mMoldova
-\033[1;31m2) \033[1;37mJapan                        \033[1;31m32) \033[1;37mFinland               \033[1;31m62) \033[1;31mNicaragua
-\033[1;31m3) \033[1;37mItaly                        \033[1;31m33) \033[1;37mChina                 \033[1;31m63) \033[1;31mMalta
-\033[1;31m4) \033[1;37mKorea                        \033[1;31m34) \033[1;37mChile                 \033[1;31m64) \033[1;31mTrinidad And Tobago
-\033[1;31m5) \033[1;37mFrance                       \033[1;31m35) \033[1;37mSouth Africa          \033[1;31m65) \033[1;31mSaudi Arabia
-\033[1;31m6) \033[1;37mGermany                      \033[1;31m36) \033[1;37mSlovakia              \033[1;31m66) \033[1;31mCroatia
-\033[1;31m7) \033[1;37mTaiwan                       \033[1;31m37) \033[1;37mHungary               \033[1;31m67) \033[1;31mCyprus
-\033[1;31m8) \033[1;37mRussian Federation           \033[1;31m38) \033[1;37mIreland               \033[1;31m68) \033[1;31mPakistan
-\033[1;31m9) \033[1;37mUnited Kingdom               \033[1;31m39) \033[1;31mEgypt                 \033[1;31m69) \033[1;31mUnited Arab Emirates
-\033[1;31m10) \033[1;37mNetherlands                 \033[1;31m40) \033[1;31mThailand              \033[1;31m70) \033[1;31mKazakhstan
-\033[1;31m11) \033[1;37mCzech Republic              \033[1;31m41) \033[1;31mUkraine               \033[1;31m71) \033[1;31mKuwait
-\033[1;31m12) \033[1;37mTurkey                      \033[1;31m42) \033[1;31mSerbia                \033[1;31m72) \033[1;31mVenezuela
-\033[1;31m13) \033[1;37mAustria                     \033[1;31m43) \033[1;31mHong Kong             \033[1;31m73) \033[1;31mGeorgia
-\033[1;31m14) \033[1;37mSwitzerland                 \033[1;31m44) \033[1;31mGreece                \033[1;31m74) \033[1;31mMontenegro
-\033[1;31m15) \033[1;37mSpain                       \033[1;31m45) \033[1;31mPortugal              \033[1;31m75) \033[1;31mEl Salvador
-\033[1;31m16) \033[1;37mCanada                      \033[1;31m46) \033[1;31mLatvia                \033[1;31m76) \033[1;31mLuxembourg
-\033[1;31m17) \033[1;37mSweden                      \033[1;31m47) \033[1;31mSingapore             \033[1;31m77) \033[1;31mCuracao
-\033[1;31m18) \033[1;37mIsrael                      \033[1;31m48) \033[1;31mIceland               \033[1;31m78) \033[1;31mPuerto Rico
-\033[1;31m19) \033[1;37mIran                        \033[1;31m49) \033[1;31mMalaysia              \033[1;31m79) \033[1;31mCosta Rica
-\033[1;31m20) \033[1;37mPoland                      \033[1;31m50) \033[1;31mColombia              \033[1;31m80) \033[1;31mBelarus
-\033[1;31m21) \033[1;37mIndia                       \033[1;31m51) \033[1;31mTunisia               \033[1;31m81) \033[1;31mAlbania
-\033[1;31m22) \033[1;37mNorway                      \033[1;31m52) \033[1;31mEstonia               \033[1;31m82) \033[1;31mLiechtenstein
-\033[1;31m23) \033[1;37mRomania                     \033[1;31m53) \033[1;31mDominican Republic    \033[1;31m83) \033[1;31mBosnia And Herzegovia
-\033[1;31m24) \033[1;37mViet Nam                    \033[1;31m54) \033[1;31mSlovenia              \033[1;31m84) \033[1;31mParaguay
-\033[1;31m25) \033[1;37mBelgium                     \033[1;31m55) \033[1;31mEcuador               \033[1;31m85) \033[1;31mPhilippines
-\033[1;31m26) \033[1;37mBrazil                      \033[1;31m56) \033[1;31mLithuania             \033[1;31m86) \033[1;37mFaroe Islands
-\033[1;31m27) \033[1;37mBulgaria                    \033[1;31m57) \033[1;31mPalestinian           \033[1;31m87) \033[1;37mGuatemala
-\033[1;31m28) \033[1;37mIndonesia                   \033[1;31m58) \033[1;31mNew Zealand           \033[1;31m88) \033[1;37mNepal
-\033[1;31m29) \033[1;37mDenmark                     \033[1;31m59) \033[1;31mBangladesh            \033[1;31m89) \033[1;31mPeru
-\033[1;31m30) \033[1;37mArgentina                   \033[1;31m60) \033[1;31mPanama                \033[1;31m90) \033[1;31mUruguay
-\033[1;31m91) \033[1;37mExtra                       \033[1;31m92) \033[1;31mAndorra               \033[1;31m93) \033[1;31mAntigua And Barbuda
-\033[1;31m94) \033[1;37mArmenia                     \033[1;31m95) \033[1;37mAngola                \033[1;31m96) \033[1;37mAustralia
-\033[1;31m97) \033[1;37mAruba                       \033[1;31m98) \033[1;31mAzerbaijan            \033[1;31m99) \033[1;31mBarbados
-\033[1;31m100) \033[1;37mBonaire                    \033[1;31m101) \033[1;37mBahamas              \033[1;31m102) \033[1;37mBotswana
-\033[1;31m103) \033[1;37mCongo                      \033[1;31m104) \033[1;37mIvory Coast          \033[1;31m105) \033[1;37mAlgeria
-\033[1;31m106) \033[1;37mFiji                       \033[1;31m107) \033[1;31mGabon                \033[1;31m108) \033[1;37mGuernsey
-\033[1;31m109) \033[1;37mGreenland                  \033[1;31m110) \033[1;31mGuadeloupe           \033[1;31m111) \033[1;37mGuam
-\033[1;31m112) \033[1;37mGuyana                     \033[1;31m113) \033[1;31mHonduras             \033[1;31m114) \033[1;31mJersey
-\033[1;31m115) \033[1;37mJamaica                    \033[1;31m116) \033[1;31mJordan               \033[1;31m117) \033[1;31mKenya
-\033[1;31m118) \033[1;37mCambodia                   \033[1;31m119) \033[1;31mSaint Kitts          \033[1;31m120) \033[1;31mCayman Islands
-\033[1;31m121) \033[1;37mLaos                       \033[1;31m122) \033[1;31mLebanon              \033[1;31m123) \033[1;31mSri Lanka
-\033[1;31m124) \033[1;37mMorocco                    \033[1;31m125) \033[1;31mMadagascar           \033[1;31m126) \033[1;31mMacedonia
-\033[1;31m127) \033[1;37mMongolia                   \033[1;31m128) \033[1;31mMacao                \033[1;31m129) \033[1;31mMartinique
-\033[1;31m130) \033[1;37mMauritius                  \033[1;31m131) \033[1;31mNamibia              \033[1;31m132) \033[1;31mNew Caledonia
-\033[1;31m133) \033[1;37mNigeria                    \033[1;31m134) \033[1;31mQatar                \033[1;31m135) \033[1;31mReunion
-\033[1;31m136) \033[1;37mSudan                      \033[1;31m137) \033[1;31mSenegal              \033[1;31m138) \033[1;31mSuriname
-\033[1;31m139) \033[1;37mSao Tome And Principe      \033[1;31m140) \033[1;31mSyria                \033[1;31m141) \033[1;31mTanzania
-\033[1;31m142) \033[1;37mUganda                     \033[1;31m143) \033[1;31mUzbekistan           \033[1;31m144) \033[1;31mSaint Vincent And The Grenadines
-\033[1;31m145) \033[1;37mBenin
+                                                                         
+1) United States                31) Mexico                61) Moldova
+2) Japan                        32) Finland               62) Nicaragua
+3) Italy                        33) China                 63) Malta
+4) Korea                        34) Chile                 64) Trinidad And Tobago
+5) France                       35) South Africa          65) Saudi Arabia
+6) Germany                      36) Slovakia              66) Croatia
+7) Taiwan                       37) Hungary               67) Cyprus
+8) Russian Federation           38) Ireland               68) Pakistan
+9) United Kingdom               39) Egypt                 69) United Arab Emirates
+10) Netherlands                 40) Thailand              70) Kazakhstan
+11) Czech Republic              41) Ukraine               71) Kuwait
+12) Turkey                      42) Serbia                72) Venezuela
+13) Austria                     43) Hong Kong             73) Georgia
+14) Switzerland                 44) Greece                74) Montenegro
+15) Spain                       45) Portugal              75) El Salvador
+16) Canada                      46) Latvia                76) Luxembourg
+17) Sweden                      47) Singapore             77) Curacao
+18) Israel                      48) Iceland               78) Puerto Rico
+19) Iran                        49) Malaysia              79) Costa Rica
+20) Poland                      50) Colombia              80) Belarus
+21) India                       51) Tunisia               81) Albania
+22) Norway                      52) Estonia               82) Liechtenstein
+23) Romania                     53) Dominican Republic    83) Bosnia And Herzegovia
+24) Viet Nam                    54) Slovenia              84) Paraguay
+25) Belgium                     55) Ecuador               85) Philippines
+26) Brazil                      56) Lithuania             86) Faroe Islands
+27) Bulgaria                    57) Palestinian           87) Guatemala
+28) Indonesia                   58) New Zealand           88) Nepal
+29) Denmark                     59) Bangladesh            89) Peru
+30) Argentina                   60) Panama                90) Uruguay
 """)
     try:
         countries = ["US", "JP", "IT", "KR", "FR", "DE", "TW", "RU", "GB", "NL",
@@ -886,34 +1023,34 @@ def menu_cctv_hack():
         
         headers = {"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:68.0) Gecko/20100101 Firefox/68.0"}
 
-        num_input = input("\033[1;32mOPTIONS : \033[1;37m").strip()
+        num_input = input("OPTIONS : ").strip()
         if not num_input.isdigit():
-            print("\033[1;31m[-] Input harus berupa angka.\033[1;37m")
+            print("[-] Input harus berupa angka.")
             return
 
         num = int(num_input)
         if num not in range(1, len(countries) + 1):
-            print("\033[1;31m[-] Pilihan negara tidak valid.\033[1;37m")
+            print("[-] Pilihan negara tidak valid.")
             return
 
         country = countries[num - 1]
-        print(f"\n\033[1;33m[+] Searching for streams in country: {country}...\033[1;37m\n")
+        print(f"\n[+] Searching for streams in country: {country}...\n")
 
         res = requests.get(f"http://www.insecam.org/en/bycountry/{country}", headers=headers, timeout=10)
         match_pages = re.findall(r'pagenavigator\("\?page=", (\d+)', res.text)
         if not match_pages:
-            print("\033[1;31m[-] No pages found or country code invalid.\033[1;37m")
+            print("[-] No pages found or country code invalid.")
             return
             
         last_page = int(match_pages[0])
-        print(f"\033[1;32m[+] Total pages found: {last_page}\033[1;37m")
+        print(f"[+] Total pages found: {last_page}")
         
         filename = f"cctv_links_{country}.txt"
         found_count = 0
 
         with open(filename, "w") as f:
             for page in range(1, last_page + 1):
-                print(f"\033[1;36m[i] Scanning page {page}/{last_page}...\033[1;37m")
+                print(f"[i] Scanning page {page}/{last_page}...")
                 page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country}/?page={page}", headers=headers, timeout=10)
                 find_ip = re.findall(r"http://\d+.\d+.\d+.\d+:\d+", page_res.text)
                 
@@ -921,15 +1058,15 @@ def menu_cctv_hack():
                     try:
                         check = requests.get(ip, headers=headers, timeout=2)
                         if check.status_code == 200:
-                            print(f"\033[1;32m[LIVE] {ip}\033[1;37m")
+                            print(f"[LIVE] {ip}")
                             f.write(ip + "\n")
                             found_count += 1
                     except:
                         continue
 
-        print(f"\n\033[1;32m[+] Done! Saved {found_count} active links to {filename}\033[1;37m")
+        print(f"\n[+] Done! Saved {found_count} active links to {filename}")
     except Exception as e:
-        print(f"\n\033[1;31m[-] Error: {e}\033[1;37m")
+        print(f"\n[-] Error: {e}")
 
 
 def menu_ai_chat():
@@ -1009,8 +1146,9 @@ def check_login() -> bool:
         print("=== AUTENTIKASI LOGIN DIPERLUKAN ===\n")
         password = input("Masukkan sandi login: ").strip()
         if password == LOGIN_PASSWORD:
-            print("\n[+] Login Berhasil! Selamat datang.\n")
-            time.sleep(1)
+            print("\n[+] Login Berhasil!")
+            time.sleep(0.8)
+            matrix_rain_animation()
             return True
         else:
             remaining = max_attempts - attempt
