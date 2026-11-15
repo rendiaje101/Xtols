@@ -251,7 +251,6 @@ def show_captcha(b64_image: str) -> Path:
     return path
 
 
-# Banner ASCII 'Xtols' yang rapi dan pas untuk layar Termux HP
 CYBER_BANNER = """[bold bright_cyan]
  ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
 ╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
@@ -748,37 +747,136 @@ def menu_track_social():
 
 def menu_cctv_hack():
     os.system('clear' if os.name == 'posix' else 'cls')
-    cctv_banner = """[bold red]
- ██████╗ █████╗ ███╗   ███╗      ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ███████╗
-██╔════╝██╔══██╗████╗ ████║      ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗██╔════╝
-██║     ███████║██╔████╔██║█████╗███████║███████║██║     █████╔╝ █████╗  ██████╔╝███████╗
-██║     ██╔══██║██║╚██╔╝██║╚════╝██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗╚╚╚╚██║
-╚██████╗██║  ██║██║ ╚═╝ ██║      ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║███████║
-╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝           
-[/bold red][bold yellow]⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE OF THIS TOOL ![/bold yellow]"""
-    console.print(Panel(cctv_banner, title="[bold red]CCTV HACK SCANNER[/bold red]", subtitle="[bold cyan]Author : RendiSec[/bold cyan]"))
     
-    country_code = console.input("[bold yellow]➤ Masukkan kode negara (contoh: ID, US, JP, SG): [/bold yellow]").strip().upper()
-    if not country_code:
-        return
+    cctv_banner = """[bold red]
+   ██████╗██████╗ ████████╗██╗   ██╗
+  ██╔════╝██╔══██╗╚══██╔══╝██║   ██║
+  ██║     ██║  ██║   ██║   ██║   ██║
+  ██║     ██║  ██║   ██║   ╚██╗ ██╔╝
+  ╚██████╗██████╔╝   ██║    ╚████╔╝ 
+   ╚═════╝╚═════╝    ╚═╝     ╚═══╝   
+     HACK SCANNER (INSECAM)[/bold red]
+[bold yellow]⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE ![/bold yellow]"""
+    
+    console.print(Panel(cctv_banner, title="[bold red]CCTV SECURITY[/bold red]", subtitle="[bold cyan]Author : RendiSec[/bold cyan]"))
+    
+    countries_list = [
+        ("[01]", "United States", "[31]", "Mexico", "[61]", "Moldova"),
+        ("[02]", "Japan", "[32]", "Finland", "[62]", "Nicaragua"),
+        ("[03]", "Italy", "[33]", "China", "[63]", "Malta"),
+        ("[04]", "Korea", "[34]", "Chile", "[64]", "Trinidad & Tobago"),
+        ("[05]", "France", "[35]", "South Africa", "[65]", "Saudi Arabia"),
+        ("[06]", "Germany", "[36]", "Slovakia", "[66]", "Croatia"),
+        ("[07]", "Taiwan", "[37]", "Hungary", "[67]", "Cyprus"),
+        ("[08]", "Russia", "[38]", "Ireland", "[68]", "Pakistan"),
+        ("[09]", "United Kingdom", "[39]", "Egypt", "[69]", "UAE"),
+        ("[10]", "Netherlands", "[40]", "Thailand", "[70]", "Kazakhstan"),
+        ("[11]", "Czech Republic", "[41]", "Ukraine", "[71]", "Kuwait"),
+        ("[12]", "Turkey", "[42]", "Serbia", "[72]", "Venezuela"),
+        ("[13]", "Austria", "[43]", "Hong Kong", "[73]", "Georgia"),
+        ("[14]", "Switzerland", "[44]", "Greece", "[74]", "Montenegro"),
+        ("[15]", "Spain", "[45]", "Portugal", "[75]", "El Salvador"),
+        ("[16]", "Canada", "[46]", "Latvia", "[76]", "Luxembourg"),
+        ("[17]", "Sweden", "[47]", "Singapore", "[77]", "Curacao"),
+        ("[18]", "Israel", "[48]", "Iceland", "[78]", "Puerto Rico"),
+        ("[19]", "Iran", "[49]", "Malaysia", "[79]", "Costa Rica"),
+        ("[20]", "Poland", "[50]", "Colombia", "[80]", "Belarus"),
+        ("[21]", "India", "[51]", "Tunisia", "[81]", "Albania"),
+        ("[22]", "Norway", "[52]", "Estonia", "[82]", "Liechtenstein"),
+        ("[23]", "Romania", "[53]", "Dominican Rep", "[83]", "Bosnia"),
+        ("[24]", "Viet Nam", "[54]", "Slovenia", "[84]", "Paraguay"),
+        ("[25]", "Belgium", "[55]", "Ecuador", "[85]", "Philippines"),
+        ("[26]", "Brazil", "[56]", "Lithuania", "[86]", "Faroe Islands"),
+        ("[27]", "Bulgaria", "[57]", "Palestinian", "[87]", "Guatemala"),
+        ("[28]", "Indonesia", "[58]", "New Zealand", "[88]", "Nepal"),
+        ("[29]", "Denmark", "[59]", "Bangladesh", "[89]", "Peru"),
+        ("[30]", "Argentina", "[60]", "Panama", "[90]", "Uruguay"),
+        ("[91]", "Extra", "[92]", "Andorra", "[93]", "Antigua"),
+        ("[94]", "Armenia", "[95]", "Angola", "[96]", "Australia"),
+        ("[97]", "Aruba", "[98]", "Azerbaijan", "[99]", "Barbados"),
+        ("[100]", "Bonaire", "[101]", "Bahamas", "[102]", "Botswana"),
+        ("[103]", "Congo", "[104]", "Ivory Coast", "[105]", "Algeria"),
+        ("[106]", "Fiji", "[107]", "Gabon", "[108]", "Guernsey"),
+        ("[109]", "Greenland", "[110]", "Guadeloupe", "[111]", "Guam"),
+        ("[112]", "Guyana", "[113]", "Honduras", "[114]", "Jersey"),
+        ("[115]", "Jamaica", "[116]", "Jordan", "[117]", "Kenya"),
+        ("[118]", "Cambodia", "[119]", "Saint Kitts", "[120]", "Cayman Islands"),
+        ("[121]", "Laos", "[122]", "Lebanon", "[123]", "Sri Lanka"),
+        ("[124]", "Morocco", "[125]", "Madagascar", "[126]", "Macedonia"),
+        ("[127]", "Mongolia", "[128]", "Macao", "[129]", "Martinique"),
+        ("[130]", "Mauritius", "[131]", "Namibia", "[132]", "New Caledonia"),
+        ("[133]", "Nigeria", "[134]", "Qatar", "[135]", "Reunion"),
+        ("[136]", "Sudan", "[137]", "Senegal", "[138]", "Suriname"),
+        ("[139]", "Sao Tome", "[140]", "Syria", "[141]", "Tanzania"),
+        ("[142]", "Uganda", "[143]", "Uzbekistan", "[144]", "St. Vincent"),
+        ("[145]", "Benin", "", "", "", "")
+    ]
 
-    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:68.0) Gecko/20100101 Firefox/68.0"}
-    console.print(f"\n[bold cyan]🔄 Mencari stream aktif di negara: {country_code}...[/bold cyan]")
+    table = Table(show_header=False, box=rich.box.ROUNDED, border_style="cyan", padding=(0, 1))
+    table.add_column("No1", style="bold yellow", width=5)
+    table.add_column("C1", style="white", width=14)
+    table.add_column("No2", style="bold yellow", width=5)
+    table.add_column("C2", style="white", width=14)
+    table.add_column("No3", style="bold yellow", width=5)
+    table.add_column("C3", style="white", width=14)
+
+    for row in countries_list:
+        table.add_row(row[0], row[1], row[2], row[3], row[4], row[5])
+
+    console.print(Panel(table, title="[bold bright_cyan]🌍 PILIH NOMOR NEGARA CCTV[/bold bright_cyan]", border_style="magenta"))
 
     try:
-        res = requests.get(f"http://www.insecam.org/en/bycountry/{country_code}", headers=headers, timeout=10)
+        countries_code_map = [
+            "US", "JP", "IT", "KR", "FR", "DE", "TW", "RU", "GB", "NL",
+            "CZ", "TR", "AT", "CH", "ES", "CA", "SE", "IL", "PL", "IR",
+            "NO", "RO", "IN", "VN", "BE", "BR", "BG", "ID", "DK", "AR",
+            "MX", "FI", "CN", "CL", "ZA", "SK", "HU", "IE", "EG", "TH",
+            "UA", "RS", "HK", "GR", "PT", "LV", "SG", "IS", "MY", "CO",
+            "TN", "EE", "DO", "SI", "EC", "LT", "PS", "NZ", "BD", "PA",
+            "MD", "NI", "MT", "TT", "SA", "HR", "CY", "PK", "AE", "KZ",
+            "KW", "VE", "GE", "ME", "SV", "LU", "CW", "PR", "CR", "BY",
+            "AL", "LI", "BA", "PY", "PH", "FO", "GT", "NP", "PE", "UY",
+            "-" , "AD", "AG", "AM", "AO", "AU", "AW", "AZ", "BB",
+            "BQ", "BS", "BW", "CG", "CI", "DZ", "FJ", "GA", "GG", "GL",
+            "GP", "GU", "GY", "HN", "JE", "JM", "JO", "KE", "KH", "KN",
+            "KY", "LA", "LB", "LK", "MA", "MG", "MK", "MN", "MO", "MQ",
+            "MU", "NA", "NC", "NG", "QA", "RE", "SD", "SN", "SR", "ST",
+            "SY", "TZ", "UG", "UZ", "VC", "BJ"
+        ]
+
+        num_input = console.input("\n[bold yellow]➤ Masukkan Nomor Negara (contoh: 28 untuk Indonesia): [/bold yellow]").strip()
+        if not num_input.isdigit():
+            console.print("[bold red]❌ Input harus berupa angka.[/bold red]")
+            return
+
+        num = int(num_input)
+        if num not in range(1, len(countries_code_map) + 1):
+            console.print("[bold red]❌ Pilihan nomor negara tidak valid.[/bold red]")
+            return
+
+        country = countries_code_map[num - 1]
+        if country == "-":
+            console.print("[bold red]❌ Negara ini tidak memiliki data stream publik.[/bold red]")
+            return
+
+        console.print(f"\n[bold cyan][+] Mencari stream aktif di negara: {country}...[/bold cyan]\n")
+
+        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:68.0) Gecko/20100101 Firefox/68.0"}
+        res = requests.get(f"http://www.insecam.org/en/bycountry/{country}", headers=headers, timeout=10)
         match_pages = re.findall(r'pagenavigator\("\?page=", (\d+)', res.text)
         if not match_pages:
-            console.print("[bold red]❌ Tidak ada halaman ditemukan atau kode negara salah.[/bold red]")
+            console.print("[bold red]❌ Tidak ada halaman stream ditemukan untuk kode negara ini.[/bold red]")
             return
             
         last_page = int(match_pages[0])
-        filename = f"cctv_links_{country_code}.txt"
+        console.print(f"[bold green][+] Total halaman ditemukan: {last_page}[/bold green]")
+        
+        filename = f"cctv_links_{country}.txt"
         found_count = 0
 
-        with open(filename, "w") as f, console.status("[bold green]Memindai stream kamera...", spinner="dots"):
+        with open(filename, "w") as f, console.status("[bold green]Memindai stream kamera aktif...", spinner="dots"):
             for page in range(1, min(last_page + 1, 3)):
-                page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country_code}/?page={page}", headers=headers, timeout=10)
+                page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country}/?page={page}", headers=headers, timeout=10)
                 find_ip = re.findall(r"http://\d+.\d+.\d+.\d+:\d+", page_res.text)
                 
                 for ip in set(find_ip):
@@ -791,9 +889,9 @@ def menu_cctv_hack():
                     except:
                         continue
 
-        console.print(f"\n[bold green]✨ Selesai! {found_count} tautan aktif disimpan ke {filename}[/bold green]")
+        console.print(f"\n[bold green]✨ Selesai! Berhasil menyimpan {found_count} tautan aktif ke file {filename}[/bold green]")
     except Exception as e:
-        console.print(f"[bold red]❌ Error: {e}[/bold red]")
+        console.print(f"\n[bold red]❌ Error: {e}[/bold red]")
 
 
 def menu_ai_chat():
@@ -897,7 +995,6 @@ def interactive() -> int:
         active = store.get("active") or "Belum ada"
         console.print(f"[bold cyan]👤 Status Akun Aktif:[/bold cyan] [bold yellow]{active}[/bold yellow]\n")
         
-        # Daftar menu dalam Kotak Panel
         menu_lines = []
         for i, (label, _) in enumerate(MENU, 1):
             menu_lines.append(f"  [bright_cyan]{i:02d}.[/bright_cyan] [white]{label}[/white]")
