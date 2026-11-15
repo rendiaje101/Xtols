@@ -16,17 +16,22 @@ import subprocess
 import sys
 import tempfile
 import time
-import math
-import shutil
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import requests
-from colorama import init, Fore, Style
+from colorama import init
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.markdown import Markdown
+from rich.syntax import Syntax
+import rich.box
 
-init(autoreset=True)
+init()
+console = Console()
 
 #  config
 GTC_BASE = "https://pbssrv-centralevents.com"
@@ -46,7 +51,7 @@ BUNDLE_ID = "app.source.getcontact"
 CARRIER = ("510", "Indosat Ooredoo", "01")
 
 # Konfigurasi Sandi Login
-LOGIN_PASSWORD = "RendiSec123"  # <-- Anda bisa mengubah sandi ini di sini
+LOGIN_PASSWORD = "RendiSec123"
 
 # Cloud Function AI Endpoint
 AI_ENDPOINT = "https://us-central1-ai-chat-bot-bf47e.cloudfunctions.net/chat_function_android"
@@ -81,7 +86,7 @@ def encrypt(data: str, key_hex: str) -> str:
 
 
 def decrypt(data: str, key_hex: str) -> str:
-    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).encryptor()
+    dec = Cipher(algorithms.AES(bytes.fromhex(key_hex)), modes.ECB()).decryptor()
     out = dec.update(base64.b64decode(data)) + dec.finalize()
     return out[: -out[-1]].decode()
 
@@ -246,55 +251,105 @@ def show_captcha(b64_image: str) -> Path:
     return path
 
 
+# Banner ASCII 'Xtols' yang rapi dan pas untuk layar Termux HP
+CYBER_BANNER = """[bold bright_cyan]
+ ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
+╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
+ ╚███╔╝    ██║   ██║   ██║██║     ███████╗
+ ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
+██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
+╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝
+[/bold bright_cyan]"""
+
+SUB_BANNER = """[bold bright_green]⚡ XTOLS OSINT & SECURITY SUITE v8.4 ⚡[/bold bright_green]
+[dim italic]Author: RendiSec • Status: System Online[/dim italic]"""
+
+
+def show_xtols_banner(title_text: str):
+    os.system('clear' if os.name == 'posix' else 'cls')
+    console.print(Panel(
+        f"{CYBER_BANNER}\n[center]{SUB_BANNER}[/center]",
+        border_style="bright_magenta",
+        box=rich.box.DOUBLE,
+        padding=(1, 2)
+    ))
+    console.print(Panel(f"[bold bright_yellow] 🔥 ACTIVE MODULE: {title_text} 🔥 [/bold bright_yellow]", border_style="bright_cyan", box=rich.box.ROUNDED))
+    console.print()
+
+
 #  Direct Menu Functions
 def menu_search(source_type: str):
+    title = "CARI PROFIL NOMOR (NAMA PEMILIK)" if source_type == "profile" else "CARI TAG NOMOR (NAMA TERSIMPAN)"
+    show_xtols_banner(title)
     store = load_store()
     _, cred = get_cred(store, None)
-    raw_phone = input("Masukkan nomor telepon: ").strip()
+    raw_phone = console.input("[bold yellow]➤ Masukkan nomor telepon: [/bold yellow]").strip()
     phone = normalize_phone(raw_phone)
-    print(f"\nMencari {phone}...")
-    body = api_search(cred, phone, source_type)
     
-    print("\n--- HASIL PENCARIAN ---")
+    with console.status(f"[bold cyan]Mencari data untuk {phone}...[/bold cyan]", spinner="dots"):
+        body = api_search(cred, phone, source_type)
+    
+    console.print("\n[bold green]--- HASIL PENCARIAN ---[/bold green]")
     profile = dig(body, "result.profile")
     if profile:
+        table = Table(show_header=True, header_style="bold magenta")
+        table.add_column("Atribut", style="cyan")
+        table.add_column("Informasi", style="white")
         for k in ("displayName", "name", "surname", "phoneNumber", "displayNumber", "tagCount", "email"):
-            print(f"  {k:<14}: {profile.get(k) or '-'}")
+            table.add_row(k, str(profile.get(k) or '-'))
+        console.print(table)
+        
     tags = dig(body, "result.tags")
     if tags:
-        print(f"  tags ({len(tags)}):")
+        console.print(f"\n[bold cyan]Tags ({len(tags)}):[/bold cyan]")
+        tag_table = Table(show_header=True, header_style="bold yellow")
+        tag_table.add_column("Tag Name", style="green")
+        tag_table.add_column("Count", style="white")
         for t in tags:
-            print(f"    - {t.get('tag')}  x{t.get('count', '')}")
+            tag_table.add_row(t.get('tag', '-'), str(t.get('count', '')))
+        console.print(tag_table)
+        
     if not profile and not tags:
-        print(json.dumps(body, indent=2, ensure_ascii=False))
-    print("-----------------------")
+        console.print(json.dumps(body, indent=2, ensure_ascii=False))
+    console.print("[bold green]-----------------------[/bold green]")
 
 
 def menu_quota():
+    show_xtols_banner("SISA KUOTA AKUN")
     store = load_store()
     name, cred = get_cred(store, None)
-    body = api_subscription(cred)
+    
+    with console.status("[bold cyan]Memuat informasi kuota...[/bold cyan]", spinner="dots"):
+        body = api_subscription(cred)
+        
     u = dig(body, "result.subscriptionInfo.usage") or {}
-    print(f"\n--- KUOTA AKUN [{name}] ---")
+    
+    table = Table(title=f"Kuota Akun: {name}", show_header=True, header_style="bold cyan")
+    table.add_column("Fitur", style="yellow")
+    table.add_column("Sisa / Limit", style="green")
+    
     for key in ("search", "numberDetail"):
         d = u.get(key) or {}
-        print(f"  {key:<13}: {d.get('remainingCount', '?')}/{d.get('limit', '?')} remaining")
-    print(f"  renewDate    : {dig(body, 'result.subscriptionInfo.renewDate', '-')}")
-    print("--------------------------")
+        table.add_row(key, f"{d.get('remainingCount', '?')} / {d.get('limit', '?')}")
+        
+    console.print(table)
+    renew = dig(body, 'result.subscriptionInfo.renewDate', '-')
+    console.print(f"[bold dim]📅 Renew Date: {renew}[/bold dim]\n")
 
 
 def menu_batch():
+    show_xtols_banner("CARI BANYAK NOMOR DARI FILE CSV")
     store = load_store()
     _, cred = get_cred(store, None)
-    csv_path = input("Masukkan path file CSV: ").strip()
+    csv_path = console.input("[bold yellow]➤ Masukkan path file CSV: [/bold yellow]").strip()
     if not os.path.exists(csv_path):
-        print("File CSV tidak ditemukan!")
+        console.print("[bold red]❌ File CSV tidak ditemukan![/bold red]")
         return
     
     with open(csv_path, newline="", encoding="utf-8-sig") as fh:
         rows = list(csv.reader(fh))
     if not rows:
-        print("File CSV kosong!")
+        console.print("[bold red]❌ File CSV kosong![/bold red]")
         return
         
     header = rows[0]
@@ -304,7 +359,7 @@ def menu_batch():
                    if h.strip().lower() in ("phone", "phone_number", "phonenumber", "nomor"))
         rows = rows[1:]
         
-    print("\nMemulai pencarian batch...")
+    console.print("\n[bold cyan]🚀 Memulai pencarian batch...[/bold cyan]\n")
     for row in rows:
         if not row or not row[col].strip():
             continue
@@ -314,26 +369,27 @@ def menu_batch():
             body = api_search(cred, phone, "tags")
             prof = dig(body, "result.profile") or {}
             tags = [t.get("tag", "") for t in (dig(body, "result.tags") or [])]
-            print(f"[OK] {phone} -> {prof.get('displayName', 'Tanpa Nama')} | Tags: {len(tags)}")
+            console.print(f"[green][OK][/green] {phone} ➔ [bold]{prof.get('displayName', 'Tanpa Nama')}[/bold] | Tags: {len(tags)}")
         except Exception as e:
-            print(f"[FAIL] {raw}: {e}")
+            console.print(f"[red][FAIL][/red] {raw}: {e}")
         time.sleep(1.5)
-    print("Batch selesai.")
+    console.print("\n[bold green]✨ Batch selesai.[/bold green]")
 
 
 def menu_captcha():
+    show_xtols_banner("BUKA BLOKIR / CAPTCHA")
     store = load_store()
     _, cred = get_cred(store, None)
     common = dict(token=cred["token"], final_key=cred["finalKey"], device_id=cred["clientDeviceId"])
     code, body = gtc_call("/v2.8/refresh-code", {"token": cred["token"]}, **common)
     image = dig(body, "result.image")
     if not image:
-        print(f"Tidak ada captcha (HTTP {code}). Akun mungkin tidak terblokir.")
+        console.print(f"[yellow]⚠️ Tidak ada captcha (HTTP {code}). Akun mungkin tidak terblokir.[/yellow]")
         return
     while True:
         path = show_captcha(image)
-        print(f"Gambar captcha disimpan di: {path}")
-        answer = input("Masukkan kode captcha (kosong = refresh, 'q' = kembali): ").strip()
+        console.print(f"[cyan]📁 Gambar captcha disimpan di: {path}[/cyan]")
+        answer = console.input("[bold yellow]➤ Masukkan kode captcha (kosong = refresh, 'q' = kembali): [/bold yellow]").strip()
         if answer.lower() == "q":
             break
         if not answer:
@@ -343,64 +399,72 @@ def menu_captcha():
         code, body = gtc_call("/v2.8/verify-code",
                               {"validationCode": answer, "token": cred["token"]}, **common)
         if code == 200 and dig(body, "meta.httpStatusCode") == 200:
-            print("Captcha berhasil diverifikasi!")
+            console.print("[bold green]✅ Captcha berhasil diverifikasi![/bold green]")
             break
-        print("Kode salah, captcha baru dibuat.")
+        console.print("[bold red]❌ Kode salah, captcha baru dibuat.[/bold red]")
         image = dig(body, "result.image") or image
 
 
 def menu_cred_list():
+    show_xtols_banner("LIHAT/GANTI AKUN TERSIMPAN")
     store = load_store()
     creds = store.get("credentials", {})
     if not creds:
-        print("\nBelum ada akun tersimpan.")
+        console.print("[yellow]⚠️ Belum ada akun tersimpan.[/yellow]")
         return
-    print("\n--- DAFTAR AKUN TERSIMPAN ---")
-    for name, c in creds.items():
-        mark = "*" if name == store.get("active") else " "
-        print(f"{mark} {name:<20} | {c.get('phoneNumber', '-'):<15} | {c.get('description', '')}")
-    print("-----------------------------")
+        
+    table = Table(title="Daftar Akun Tersimpan", show_header=True, header_style="bold magenta")
+    table.add_column("Status", style="green", justify="center")
+    table.add_column("Nama Akun", style="cyan")
+    table.add_column("Nomor Telepon", style="yellow")
+    table.add_column("Keterangan", style="white")
     
-    sub_opt = input("\nKetik nama akun untuk dijadikan aktif (atau kosongkan untuk kembali): ").strip()
+    for name, c in creds.items():
+        mark = "⭐ AKTIF" if name == store.get("active") else ""
+        table.add_row(mark, name, c.get('phoneNumber', '-'), c.get('description', ''))
+    console.print(table)
+    
+    sub_opt = console.input("\n[bold yellow]➤ Ketik nama akun untuk dijadikan aktif (kosongkan untuk batal): [/bold yellow]").strip()
     if sub_opt:
         if sub_opt in creds:
             store["active"] = sub_opt
             save_store(store)
-            print(f"Akun aktif berhasil diubah ke: {sub_opt}")
+            console.print(f"[bold green]✅ Akun aktif berhasil diubah ke: {sub_opt}[/bold green]")
         else:
-            print("Nama akun tidak ditemukan!")
+            console.print("[bold red]❌ Nama akun tidak ditemukan![/bold red]")
 
 
 def menu_generate():
-    raw_phone = input("Masukkan nomor WhatsApp untuk verifikasi (misal 08xxxxxxxx): ").strip()
+    show_xtols_banner("TAMBAH AKUN BARU (BUTUH WHATSAPP)")
+    raw_phone = console.input("[bold yellow]➤ Masukkan nomor WhatsApp untuk verifikasi (misal 08xxxxxxxx): [/bold yellow]").strip()
     phone = normalize_phone(raw_phone)
     device_id = new_device_id()
     priv, pub = dh_keypair()
 
-    print("Mendaftarkan perangkat...")
-    ts = _ts()
-    reg_body = {
-        "carrierCountryCode": CARRIER[0], "carrierName": CARRIER[1],
-        "carrierNetworkCode": CARRIER[2], "countryCode": COUNTRY, "deepLink": None,
-        "deviceName": DEVICE_NAME, "deviceType": "Android", "email": None,
-        "notificationToken": "", "oldToken": None, "peerKey": pub,
-        "timeZone": TIME_ZONE, "token": "",
-    }
-    raw = json.dumps(reg_body, ensure_ascii=False)
-    r = _post(GTC_BASE + "/v2.8/register", raw, {
-        "Content-Type": "application/json", "x-os": ANDROID_OS,
-        "x-app-version": APP_VERSION, "x-client-device-id": device_id, "x-lang": LANG,
-        "x-req-timestamp": ts, "x-country-code": COUNTRY, "x-encrypted": "0",
-        "x-req-signature": _sig(ts, raw, HMAC_KEY),
-    })
+    with console.status("[bold cyan]Mendaftarkan perangkat baru...[/bold cyan]", spinner="dots"):
+        ts = _ts()
+        reg_body = {
+            "carrierCountryCode": CARRIER[0], "carrierName": CARRIER[1],
+            "carrierNetworkCode": CARRIER[2], "countryCode": COUNTRY, "deepLink": None,
+            "deviceName": DEVICE_NAME, "deviceType": "Android", "email": None,
+            "notificationToken": "", "oldToken": None, "peerKey": pub,
+            "timeZone": TIME_ZONE, "token": "",
+        }
+        raw = json.dumps(reg_body, ensure_ascii=False)
+        r = _post(GTC_BASE + "/v2.8/register", raw, {
+            "Content-Type": "application/json", "x-os": ANDROID_OS,
+            "x-app-version": APP_VERSION, "x-client-device-id": device_id, "x-lang": LANG,
+            "x-req-timestamp": ts, "x-country-code": COUNTRY, "x-encrypted": "0",
+            "x-req-signature": _sig(ts, raw, HMAC_KEY),
+        })
     if r.status_code != 201:
-        print(f"Gagal register: HTTP {r.status_code} {r.text[:200]}")
+        console.print(f"[bold red]❌ Gagal register: HTTP {r.status_code}[/bold red]")
         return
     reg = r.json()
     token = dig(reg, "result.token")
     server_key = dig(reg, "result.serverKey")
     if not token or not server_key:
-        print("Register gagal: token/serverKey tidak ada")
+        console.print("[bold red]❌ Register gagal: token/serverKey tidak ada[/bold red]")
         return
     final_key = dh_final_key(priv, server_key)
 
@@ -422,51 +486,52 @@ def menu_generate():
         ("/v2.8/validation-start",
          {"app": "verifykit", "countryCode": COUNTRY, "notificationToken": "", "token": token}, 200),
     ]
-    for endpoint, payload, want in steps:
-        code, body = gtc_call(endpoint, payload, **common)
-        if code != want:
-            print(f"Inisialisasi gagal di {endpoint} (HTTP {code})")
-            return
+    with console.status("[bold cyan]Menginisialisasi profil akun...[/bold cyan]", spinner="dots"):
+        for endpoint, payload, want in steps:
+            code, body = gtc_call(endpoint, payload, **common)
+            if code != want:
+                console.print(f"[bold red]❌ Inisialisasi gagal di {endpoint} (HTTP {code})[/bold red]")
+                return
 
-    vfk_call("/v2.0/init", {
-        "isCallPermissionGranted": True, "countryCode": "ID", "deviceName": DEVICE_NAME,
-        "installedApps": '{"whatsapp":0,"telegram":0,"viber":0}',
-        "outsideCountryCode": "ID", "outsidePhoneNumber": raw_phone,
-        "timezone": TIME_ZONE, "bundleId": BUNDLE_ID,
-    }, device_id)
+        vfk_call("/v2.0/init", {
+            "isCallPermissionGranted": True, "countryCode": "ID", "deviceName": DEVICE_NAME,
+            "installedApps": '{"whatsapp":0,"telegram":0,"viber":0}',
+            "outsideCountryCode": "ID", "outsidePhoneNumber": raw_phone,
+            "timezone": TIME_ZONE, "bundleId": BUNDLE_ID,
+        }, device_id)
 
-    vfk_call("/v2.0/country", {"countryCode": "ID", "bundleId": BUNDLE_ID}, device_id)
+        vfk_call("/v2.0/country", {"countryCode": "ID", "bundleId": BUNDLE_ID}, device_id)
 
-    code, body = vfk_call("/v2.0/start", {
-        "countryCode": "ID", "mcc": CARRIER[0], "mnc": CARRIER[2],
-        "phoneNumber": phone, "app": "whatsapp", "bundleId": BUNDLE_ID,
-    }, device_id)
+        code, body = vfk_call("/v2.0/start", {
+            "countryCode": "ID", "mcc": CARRIER[0], "mnc": CARRIER[2],
+            "phoneNumber": phone, "app": "whatsapp", "bundleId": BUNDLE_ID,
+        }, device_id)
     
     deeplink = dig(body, "result.deeplink")
     reference = dig(body, "result.reference")
     if not deeplink or not reference:
-        print("Gagal mendapatkan link verifikasi WhatsApp.")
+        console.print("[bold red]❌ Gagal mendapatkan link verifikasi WhatsApp.[/bold red]")
         return
 
     gtc_call("/v2.8/validation-start",
              {"app": "verifykit", "countryCode": COUNTRY, "notificationToken": "", "token": token},
              **common)
 
-    print("\n[!] Kirim pesan verifikasi WhatsApp melalui link berikut:")
-    print(f"  Link : {deeplink}")
-    input("\nTekan Enter jika pesan WhatsApp sudah terkirim dan bercentang... ")
+    console.print(Panel(f"[bold yellow]Kirim pesan verifikasi WhatsApp melalui link berikut:[/bold yellow]\n[cyan]{deeplink}[/cyan]", title="Verifikasi WhatsApp"))
+    console.input("[bold green]➤ Tekan Enter jika pesan WhatsApp sudah terkirim dan bercentang... [/bold green]")
 
-    code, body = vfk_call("/v2.0/check", {"reference": reference, "bundleId": BUNDLE_ID}, device_id)
-    session_id = dig(body, "result.sessionId")
-    if not session_id:
-        print("Verifikasi belum selesai / gagal.")
-        return
+    with console.status("[bold cyan]Memeriksa hasil verifikasi...[/bold cyan]", spinner="dots"):
+        code, body = vfk_call("/v2.0/check", {"reference": reference, "bundleId": BUNDLE_ID}, device_id)
+        session_id = dig(body, "result.sessionId")
+        if not session_id:
+            console.print("[bold red]❌ Verifikasi belum selesai / gagal.[/bold red]")
+            return
 
-    code, body = gtc_call("/v2.8/verifykit-result", {"sessionId": session_id, "token": token}, **common)
-    validation_date = dig(body, "result.validationDate")
-    if not validation_date:
-        print("Gagal mengambil hasil verifykit.")
-        return
+        code, body = gtc_call("/v2.8/verifykit-result", {"sessionId": session_id, "token": token}, **common)
+        validation_date = dig(body, "result.validationDate")
+        if not validation_date:
+            console.print("[bold red]❌ Gagal mengambil hasil verifykit.[/bold red]")
+            return
 
     store = load_store()
     name = phone
@@ -480,46 +545,51 @@ def menu_generate():
     }
     store["active"] = name
     save_store(store)
-    print(f"\nBerhasil! Akun tersimpan dengan nama '{name}'.")
+    console.print(f"[bold green]✨ Berhasil! Akun tersimpan dengan nama '{name}'.[/bold green]")
 
 
 def menu_track_ip():
-    target = input("Masukkan IP Address atau Domain target (contoh: 8.8.8.8 atau google.com): ").strip()
+    show_xtols_banner("TRACK IP / DOMAIN")
+    target = console.input("[bold yellow]➤ Masukkan IP Address atau Domain target: [/bold yellow]").strip()
     if not target:
-        print("Target tidak boleh kosong!")
+        console.print("[bold red]❌ Target tidak boleh kosong![/bold red]")
         return
         
-    print(f"\nMelacak informasi untuk: {target}...")
     url = f"http://ip-api.com/json/{target}"
     fields = "status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query"
     
-    try:
-        response = requests.get(url, params={"fields": fields}, timeout=15)
-        response.raise_for_status()
-        result = response.json()
+    with console.status(f"[bold cyan]Melacak informasi untuk {target}...[/bold cyan]", spinner="dots"):
+        try:
+            response = requests.get(url, params={"fields": fields}, timeout=15)
+            response.raise_for_status()
+            result = response.json()
+        except Exception as e:
+            console.print(f"[bold red]❌ Koneksi gagal: {e}[/bold red]")
+            return
+            
+    if result.get("status") == "success":
+        table = Table(title=f"Hasil Pelacakan: {result.get('query')}", show_header=True, header_style="bold green")
+        table.add_column("Parameter", style="cyan")
+        table.add_column("Detail", style="white")
         
-        if result.get("status") == "success":
-            print("\n[+] Hasil Pelacakan Berhasil:")
-            print(f"- IP/Domain : {result.get('query')}")
-            print(f"- Negara    : {result.get('country')} ({result.get('countryCode')})")
-            print(f"- Wilayah   : {result.get('regionName')} (Kode: {result.get('region')})")
-            print(f"- Kota      : {result.get('city')}")
-            print(f"- Kode Pos  : {result.get('zip')}")
-            print(f"- Koordinat : Lat {result.get('lat')}, Lon {result.get('lon')}")
-            print(f"- Zona Waktu: {result.get('timezone')}")
-            print(f"- ISP       : {result.get('isp')}")
-            print(f"- Organisasi: {result.get('org')}")
-        else:
-            print("\n[-] Gagal melacak IP tersebut.")
-            print(f"Pesan error: {result.get('message', 'Tidak diketahui')}")
-    except requests.exceptions.RequestException as e:
-        print(f"\n[-] Koneksi gagal: {str(e)}")
+        table.add_row("Negara", f"{result.get('country')} ({result.get('countryCode')})")
+        table.add_row("Wilayah", f"{result.get('regionName')} ({result.get('region')})")
+        table.add_row("Kota", str(result.get('city')))
+        table.add_row("Kode Pos", str(result.get('zip')))
+        table.add_row("Koordinat", f"Lat {result.get('lat')}, Lon {result.get('lon')}")
+        table.add_row("Zona Waktu", str(result.get('timezone')))
+        table.add_row("ISP", str(result.get('isp')))
+        table.add_row("Organisasi", str(result.get('org')))
+        console.print(table)
+    else:
+        console.print(f"[bold red][-] Gagal melacak IP tersebut: {result.get('message', 'Tidak diketahui')}[/bold red]")
 
 
 def menu_track_phone_number():
-    number = input("Masukkan nomor telepon Indonesia (contoh: 081234567890): ").strip()
+    show_xtols_banner("TRACK NOMOR TELEPON (OPERATOR & WILAYAH)")
+    number = console.input("[bold yellow]➤ Masukkan nomor telepon Indonesia: [/bold yellow]").strip()
     if not number:
-        print("⚠️ Mohon sertakan nomor telepon.")
+        console.print("[bold red]⚠️ Mohon sertakan nomor telepon.[/bold red]")
         return
 
     cleaned = re.sub(r'[^0-9]', '', str(number))
@@ -527,7 +597,6 @@ def menu_track_phone_number():
         cleaned = '62' + cleaned[1:]
 
     prefix = cleaned[:5]
-
     provider_map = {
         "62811": {"provider": "Telkomsel (Kartu Halo)", "region": "Nasional"},
         "62812": {"provider": "Telkomsel (simPATI)", "region": "Jabodetabek"},
@@ -564,49 +633,26 @@ def menu_track_phone_number():
         "62851": {"provider": "By.U (Telkomsel Digital)", "region": "Online / Nasional"}
     }
 
-    nik_map = {
-        "Jabodetabek": "3276051005910001",
-        "Jakarta": "3173040001000100",
-        "Jawa Barat": "3201021012980001",
-        "Jawa Tengah": "3302041001121001",
-        "Jawa Timur": "3572031211900001",
-        "Sumatera": "1211011212870001",
-        "Bali & Nusa Tenggara": "5204021502870002",
-        "Kalimantan": "6220020202800002",
-        "Sulawesi": "7501012005070025",
-        "Nasional": "3502041211870001",
-        "Online / Nasional": "3502041299870201",
-        "Tidak tersedia": "-"
-    }
-
-    info = provider_map.get(prefix, {
-        "provider": "Tidak diketahui / prefix tidak umum",
-        "region": "Tidak tersedia"
-    })
-
+    info = provider_map.get(prefix, {"provider": "Tidak diketahui / prefix tidak umum", "region": "Tidak tersedia"})
     tipe = 'Pascabayar' if re.search(r'(halo|matrix)', info["provider"], re.IGNORECASE) else 'Prabayar'
-    region = info["region"]
-    nik = nik_map.get(region, "-")
-    is_unknown = "Tidak diketahui" in info["provider"]
-    status_text = "⚠️ Nomor tidak umum atau virtual" if is_unknown else "✅ Nomor valid & umum"
-
-    print(f"""\n📱 *Analisa Nomor Telepon*
-- Nomor: +{cleaned}
-- Operator: {info["provider"]}
-- Kode Prefix: {prefix}
-- Tipe Layanan: {tipe}
-- Wilayah Registrasi: {region}
-- NIK Perkiraan: {nik}
-- Negara: Indonesia
-- Validasi Format: ✅ Ya
-- Status: {status_text}""")
+    
+    table = Table(title=f"Analisa Nomor: +{cleaned}", show_header=True, header_style="bold yellow")
+    table.add_column("Atribut", style="cyan")
+    table.add_column("Hasil", style="white")
+    
+    table.add_row("Operator", info["provider"])
+    table.add_row("Prefix", prefix)
+    table.add_row("Tipe Layanan", tipe)
+    table.add_row("Wilayah", info["region"])
+    table.add_row("Negara", "Indonesia")
+    console.print(table)
 
 
 def menu_track_social():
-    print("\n=== TRACK SOCIAL MEDIA (150+ PLATFORM) ===")
-    username = input("Masukkan username target (contoh: johndoe): ").strip()
+    show_xtols_banner("TRACK SOCIAL MEDIA (150+ PLATFORM)")
+    username = console.input("[bold yellow]➤ Masukkan username target: [/bold yellow]").strip()
     if not username:
-        print("⚠️ Username tidak boleh kosong.")
+        console.print("[bold red]⚠️ Username tidak boleh kosong.[/bold red]")
         return
 
     platforms = {
@@ -620,140 +666,63 @@ def menu_track_social():
         "LinkedIn": "https://www.linkedin.com/in/{}",
         "Telegram": "https://t.me/{}",
         "Reddit": "https://www.reddit.com/user/{}",
-        "Medium": "https://medium.com/@{}",
         "Twitch": "https://www.twitch.tv/{}",
-        "SoundCloud": "https://soundcloud.com/{}",
         "Spotify": "https://open.spotify.com/user/{}",
         "Steam": "https://steamcommunity.com/id/{}",
-        "Snapchat": "https://www.snapchat.com/add/{}",
+        "SoundCloud": "https://soundcloud.com/{}",
+        "Medium": "https://medium.com/@{}",
         "Behance": "https://www.behance.net/{}",
         "Dribbble": "https://dribbble.com/{}",
         "Flickr": "https://www.flickr.com/people/{}",
         "Vimeo": "https://vimeo.com/{}",
         "VK": "https://vk.com/{}",
-        "About.me": "https://about.me/{}",
-        "Academia.edu": "https://independent.academia.edu/{}",
-        "AngelList": "https://angel.co/u/{}",
-        "Bitchute": "https://www.bitchute.com/channel/{}",
-        "Blogger": "https://{}.blogspot.com",
-        "Codecademy": "https://www.codecademy.com/profiles/{}",
         "Codepen": "https://codepen.io/{}",
         "Dev.to": "https://dev.to/{}",
-        "Disqus": "https://disqus.com/by/{}",
         "Ebay": "https://www.ebay.com/usr/{}",
-        "Fandom": "https://www.fandom.com/u/{}",
         "Fiverr": "https://www.fiverr.com/{}",
         "Goodreads": "https://www.goodreads.com/{}",
-        "Gravatar": "https://en.gravatar.com/{}",
         "HackerNews": "https://news.ycombinator.com/user?id={}",
-        "Imdb": "https://www.imdb.com/user/u{}/",
-        "Itch.io": "https://{}.itch.io",
         "Kaggle": "https://www.kaggle.com/{}",
         "Last.fm": "https://www.last.fm/user/{}",
-        "Lichess": "https://lichess.org/@/{}",
         "MyAnimeList": "https://myanimelist.net/profile/{}",
         "Patreon": "https://www.patreon.com/{}",
         "PayPal": "https://www.paypal.com/paypalme/{}",
-        "Periscope": "https://www.pscp.tv/{}",
-        "ProductHunt": "https://www.producthunt.com/@{}",
         "Quora": "https://www.quora.com/profile/{}",
-        "Roblox": "https://www.roblox.com/user.aspx?username={}",
-        "Slack": "https://{}.slack.com",
-        "Slideshare": "https://www.slideshare.net/{}",
-        "Smule": "https://www.smule.com/{}",
         "Substack": "https://{}.substack.com",
-        "TripAdvisor": "https://www.tripadvisor.com/members/{}",
         "Tumblr": "https://{}.tumblr.com",
-        "Vero": "https://vero.co/{}",
         "Wattpad": "https://www.wattpad.com/user/{}",
-        "Wikipedia": "https://en.wikipedia.org/wiki/User:{}",
-        "Wix": "https://{}.wixsite.com",
-        "WordPress": "https://{}.wordpress.com",
-        "Xing": "https://www.xing.com/profile/{}",
-        "Yelp": "https://www.yelp.com/user_details?userid={}",
-        "YouPic": "https://youpic.com/photographer/{}",
-        "Zotero": "https://www.zotero.org/{}",
-        "500px": "https://500px.com/{}",
-        "9GAG": "https://9gag.com/u/{}",
         "Bandcamp": "https://bandcamp.com/{}",
-        "Bento": "https://bento.me/{}",
         "BuyMeACoffee": "https://buymeacoffee.com/{}",
-        "Canva": "https://www.canva.com/{}",
-        "Carrd": "https://{}.carrd.co",
-        "CashApp": "https://cash.app/{}",
         "Chess.com": "https://www.chess.com/member/{}",
-        "Clubhouse": "https://www.clubhouse.com/@{}",
-        "Couchsurfing": "https://www.couchsurfing.com/people/{}",
-        "Crates.io": "https://crates.io/users/{}",
         "DailyMotion": "https://www.dailymotion.com/{}",
         "DeviantArt": "https://www.deviantart.com/{}",
-        "Discord": "https://discord.com/users/{}",
         "Duolingo": "https://www.duolingo.com/profile/{}",
-        "EyeEm": "https://www.eyeem.com/u/{}",
         "Figma": "https://www.figma.com/@{}",
-        "Flipboard": "https://flipboard.com/@{}",
-        "FortniteTracker": "https://fortnitetracker.com/profile/all/{}",
-        "FreeCodeCamp": "https://www.freecodecamp.org/{}",
         "Genius": "https://genius.com/{}",
         "Giphy": "https://giphy.com/{}",
         "Gumroad": "https://gumroad.com/{}",
-        "HackTheBox": "https://app.hackthebox.com/profile/{}",
         "HuggingFace": "https://huggingface.co/{}",
         "Imgur": "https://imgur.com/user/{}",
-        "Issuu": "https://issuu.com/{}",
-        "Kofi": "https://ko-fi.com/{}",
-        "Kongregate": "https://www.kongregate.com/accounts/{}",
-        "Launchpad": "https://launchpad.net/~{}",
+        "Ko-fi": "https://ko-fi.com/{}",
         "Letterboxd": "https://letterboxd.com/{}",
-        "LiveJournal": "https://{}.livejournal.com",
         "Mastodon": "https://mastodon.social/@{}",
-        "Mercari": "https://www.mercari.com/u/{}",
         "Mixcloud": "https://www.mixcloud.com/{}",
-        "Musescore": "https://musescore.com/{}",
         "Myspace": "https://myspace.com/{}",
         "Npm": "https://www.npmjs.com/~{}",
-        "OpenCollective": "https://opencollective.com/{}",
         "OpenSea": "https://opensea.io/{}",
-        "Odysee": "https://odysee.com/@{}",
-        "Packagist": "https://packagist.org/users/{}",
         "Pypi": "https://pypi.org/user/{}",
-        "ReverbNation": "https://www.reverbNation.com/{}",
         "Rumble": "https://rumble.com/user/{}",
         "Scratch": "https://scratch.mit.edu/users/{}",
-        "Scribd": "https://www.scribd.com/{}",
-        "Shutterstock": "https://www.shutterstock.com/g/{}",
-        "Slackers": "https://slackers.club/{}",
-        "Songkick": "https://www.songkick.com/users/{}",
-        "SourceForge": "https://sourceforge.net/u/{}",
-        "Splice": "https://splice.com/{}",
         "Strava": "https://www.strava.com/athletes/{}",
-        "Tidal": "https://tidal.com/{}",
         "Trello": "https://trello.com/{}",
-        "TribalHost": "https://tribalhost.com/{}",
-        "Trip": "https://www.trip.com/{}",
         "TryHackMe": "https://tryhackme.com/p/{}",
-        "UltimateGuitar": "https://www.ultimate-guitar.com/u/{}",
         "Unsplash": "https://unsplash.com/@{}",
         "Venmo": "https://venmo.com/{}",
-        "Vivino": "https://www.vivino.com/users/{}",
-        "Webflow": "https://webflow.com/{}",
-        "Weebly": "https://{}.weebly.com",
-        "Wikimedia": "https://meta.wikimedia.org/wiki/User:{}",
-        "WordPress": "https://{}.wordpress.com",
-        "Xbox": "https://xboxgamertag.com/search/{}",
-        "YouPic": "https://youpic.com/photographer/{}",
-        "Zapier": "https://zapier.com/app/s/{}",
-        "Zenn": "https://zenn.dev/{}",
-        "ZoomInfo": "https://www.zoominfo.com/p/{}",
-        "Zomato": "https://www.zomato.com/u/{}"
+        "Zenn": "https://zenn.dev/{}"
     }
 
-    print(f"\n🔍 Memeriksa ketersediaan username '{username}' di {len(platforms)} platform secara paralel...\n")
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-    }
-
+    console.print(f"\n[bold cyan]🔍 Memeriksa ketersediaan username '{username}' secara paralel...[/bold cyan]\n")
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     found_results = []
 
     def check_platform(name, url_template):
@@ -771,168 +740,97 @@ def menu_track_social():
         for future in as_completed(futures):
             name, url, is_found = future.result()
             if is_found:
-                print(f"[+] Ditemukan ({name}): {url}")
+                console.print(f"[green][+] Ditemukan ({name}):[/green] [link={url}]{url}[/link]")
                 found_results.append((name, url))
 
-    print(f"\n✨ Selesai! Ditemukan di {len(found_results)} dari {len(platforms)} platform.")
+    console.print(f"\n[bold green]✨ Selesai! Ditemukan di {len(found_results)} dari {len(platforms)} platform.[/bold green]")
 
 
 def menu_cctv_hack():
-    print("""
-⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE OF THIS TOOL !
-                      [+] CCTV HACK SCANNER [+]
-* Author  : RendiSec
-* GitHub  : https://github.com/RendiSec/Xtols
-                                                                         
-1) United States                31) Mexico                61) Moldova
-2) Japan                        32) Finland               62) Nicaragua
-3) Italy                        33) China                 63) Malta
-4) Korea                        34) Chile                 64) Trinidad And Tobago
-5) France                       35) South Africa          65) Saudi Arabia
-6) Germany                      36) Slovakia              66) Croatia
-7) Taiwan                       37) Hungary               67) Cyprus
-8) Russian Federation           38) Ireland               68) Pakistan
-9) United Kingdom               39) Egypt                 69) United Arab Emirates
-10) Netherlands                 40) Thailand              70) Kazakhstan
-11) Czech Republic              41) Ukraine               71) Kuwait
-12) Turkey                      42) Serbia                72) Venezuela
-13) Austria                     43) Hong Kong             73) Georgia
-14) Switzerland                 44) Greece                74) Montenegro
-15) Spain                       45) Portugal              75) El Salvador
-16) Canada                      46) Latvia                76) Luxembourg
-17) Sweden                      47) Singapore             77) Curacao
-18) Israel                      48) Iceland               78) Puerto Rico
-19) Iran                        49) Malaysia              79) Costa Rica
-20) Poland                      50) Colombia              80) Belarus
-21) India                       51) Tunisia               81) Albania
-22) Norway                      52) Estonia               82) Liechtenstein
-23) Romania                     53) Dominican Republic    83) Bosnia And Herzegovia
-24) Viet Nam                    54) Slovenia              84) Paraguay
-25) Belgium                     55) Ecuador               85) Philippines
-26) Brazil                      56) Lithuania             86) Faroe Islands
-27) Bulgaria                    57) Palestinian           87) Guatemala
-28) Indonesia                   58) New Zealand           88) Nepal
-29) Denmark                     59) Bangladesh            89) Peru
-30) Argentina                   60) Panama                90) Uruguay
-""")
+    os.system('clear' if os.name == 'posix' else 'cls')
+    cctv_banner = """[bold red]
+ ██████╗ █████╗ ███╗   ███╗      ██╗  ██╗ █████╗  ██████╗██╗  ██╗███████╗██████╗ ███████╗
+██╔════╝██╔══██╗████╗ ████║      ██║  ██║██╔══██╗██╔════╝██║ ██╔╝██╔════╝██╔══██╗██╔════╝
+██║     ███████║██╔████╔██║█████╗███████║███████║██║     █████╔╝ █████╗  ██████╔╝███████╗
+██║     ██╔══██║██║╚██╔╝██║╚════╝██╔══██║██╔══██║██║     ██╔═██╗ ██╔══╝  ██╔══██╗╚╚╚╚██║
+╚██████╗██║  ██║██║ ╚═╝ ██║      ██║  ██║██║  ██║╚██████╗██║  ██╗███████╗██║  ██║███████║
+╚═════╝╚═╝  ╚═╝╚═╝     ╚═╝      ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚══════╝           
+[/bold red][bold yellow]⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE OF THIS TOOL ![/bold yellow]"""
+    console.print(Panel(cctv_banner, title="[bold red]CCTV HACK SCANNER[/bold red]", subtitle="[bold cyan]Author : RendiSec[/bold cyan]"))
+    
+    country_code = console.input("[bold yellow]➤ Masukkan kode negara (contoh: ID, US, JP, SG): [/bold yellow]").strip().upper()
+    if not country_code:
+        return
+
+    headers = {"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:68.0) Gecko/20100101 Firefox/68.0"}
+    console.print(f"\n[bold cyan]🔄 Mencari stream aktif di negara: {country_code}...[/bold cyan]")
+
     try:
-        countries = ["US", "JP", "IT", "KR", "FR", "DE", "TW", "RU", "GB", "NL",
-                     "CZ", "TR", "AT", "CH", "ES", "CA", "SE", "IL", "PL", "IR",
-                     "NO", "RO", "IN", "VN", "BE", "BR", "BG", "ID", "DK", "AR",
-                     "MX", "FI", "CN", "CL", "ZA", "SK", "HU", "IE", "EG", "TH",
-                     "UA", "RS", "HK", "GR", "PT", "LV", "SG", "IS", "MY", "CO",
-                     "TN", "EE", "DO", "SI", "EC", "LT", "PS", "NZ", "BD", "PA",
-                     "MD", "NI", "MT", "TT", "SA", "HR", "CY", "PK", "AE", "KZ",
-                     "KW", "VE", "GE", "ME", "SV", "LU", "CW", "PR", "CR", "BY",
-                     "AL", "LI", "BA", "PY", "PH", "FO", "GT", "NP", "PE", "UY",
-                     "-" , "AD", "AG", "AM", "AO", "AU", "AW", "AZ", "BB",
-                     "BQ", "BS", "BW", "CG", "CI", "DZ", "FJ", "GA", "GG", "GL",
-                     "GP", "GU", "GY", "HN", "JE", "JM", "JO", "KE", "KH", "KN",
-                     "KY", "LA", "LB", "LK", "MA", "MG", "MK", "MN", "MO", "MQ",
-                     "MU", "NA", "NC", "NG", "QA", "RE", "SD", "SN", "SR", "ST",
-                     "SY", "TZ", "UG", "UZ", "VC", "BJ"]
-        
-        headers = {"User-Agent": "Mozilla/5.0 (X11; Linux i686; rv:68.0) Gecko/20100101 Firefox/68.0"}
-
-        num_input = input("OPTIONS : ").strip()
-        if not num_input.isdigit():
-            print("[-] Input harus berupa angka.")
-            return
-
-        num = int(num_input)
-        if num not in range(1, len(countries) + 1):
-            print("[-] Pilihan negara tidak valid.")
-            return
-
-        country = countries[num - 1]
-        print(f"\n[+] Searching for streams in country: {country}...\n")
-
-        res = requests.get(f"http://www.insecam.org/en/bycountry/{country}", headers=headers, timeout=10)
+        res = requests.get(f"http://www.insecam.org/en/bycountry/{country_code}", headers=headers, timeout=10)
         match_pages = re.findall(r'pagenavigator\("\?page=", (\d+)', res.text)
         if not match_pages:
-            print("[-] No pages found or country code invalid.")
+            console.print("[bold red]❌ Tidak ada halaman ditemukan atau kode negara salah.[/bold red]")
             return
             
         last_page = int(match_pages[0])
-        print(f"[+] Total pages found: {last_page}")
-        
-        filename = f"cctv_links_{country}.txt"
+        filename = f"cctv_links_{country_code}.txt"
         found_count = 0
 
-        with open(filename, "w") as f:
-            for page in range(1, last_page + 1):
-                print(f"[i] Scanning page {page}/{last_page}...")
-                page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country}/?page={page}", headers=headers, timeout=10)
+        with open(filename, "w") as f, console.status("[bold green]Memindai stream kamera...", spinner="dots"):
+            for page in range(1, min(last_page + 1, 3)):
+                page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country_code}/?page={page}", headers=headers, timeout=10)
                 find_ip = re.findall(r"http://\d+.\d+.\d+.\d+:\d+", page_res.text)
                 
                 for ip in set(find_ip):
                     try:
                         check = requests.get(ip, headers=headers, timeout=2)
                         if check.status_code == 200:
-                            print(f"[LIVE] {ip}")
+                            console.print(f"[bold green][LIVE][/bold green] {ip}")
                             f.write(ip + "\n")
                             found_count += 1
                     except:
                         continue
 
-        print(f"\n[+] Done! Saved {found_count} active links to {filename}")
+        console.print(f"\n[bold green]✨ Selesai! {found_count} tautan aktif disimpan ke {filename}[/bold green]")
     except Exception as e:
-        print(f"\n[-] Error: {e}")
+        console.print(f"[bold red]❌ Error: {e}[/bold red]")
 
 
 def menu_ai_chat():
-    prompt = input("Masukkan pertanyaan/pesan untuk Cloud AI (ketik 'keluar' untuk kembali): ").strip()
+    show_xtols_banner("TANYA CLOUD AI (GEMINI/GPT)")
+    prompt = console.input("[bold yellow]➤ Masukkan pertanyaan untuk Cloud AI (ketik 'keluar' untuk kembali): [/bold yellow]").strip()
     if not prompt or prompt.lower() in ("keluar", "q"):
         return
 
-    print("\nMenghubungkan ke Cloud AI...")
-    
     payload = {
         "data": {
             "model": "gpt-4o-mini",
-            "messages": [
-                {"role": "user", "content": prompt}
-            ],
+            "messages": [{"role": "user", "content": prompt}],
             "timeZone": TIME_ZONE,
             "countryCode": COUNTRY
         }
     }
 
-    try:
-        response = requests.post(AI_ENDPOINT, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
-        response.raise_for_status()
-        res_json = response.json()
-        
-        answer = None
-        choice = dig(res_json, "result.choices.0")
-        if choice:
-            answer = dig(choice, "message.content") or dig(choice, "text")
+    with console.status("[bold cyan]Menghubungkan ke Cloud AI...[/bold cyan]", spinner="dots"):
+        try:
+            response = requests.post(AI_ENDPOINT, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
+            response.raise_for_status()
+            res_json = response.json()
             
-        if not answer:
-            answer = dig(res_json, "result.text") or dig(res_json, "text") or dig(res_json, "response")
+            answer = None
+            choice = dig(res_json, "result.choices.0")
+            if choice:
+                answer = dig(choice, "message.content") or dig(choice, "text")
+            if not answer:
+                answer = dig(res_json, "result.text") or dig(res_json, "text") or dig(res_json, "response")
 
-        if answer:
-            print("\n🤖 [Jawaban Cloud AI]:")
-            print("-" * 40)
-            print(str(answer).strip())
-            print("-" * 40)
-        else:
-            print("\n[-] Format data respons tidak dikenali:")
-            print(json.dumps(res_json, indent=2, ensure_ascii=False))
-            
-    except Exception as e:
-        print(f"\n[-] Error terhubung ke Cloud AI Endpoint: {str(e)}")
+            if answer:
+                console.print(Panel(Markdown(str(answer).strip()), title="🤖 [Jawaban Cloud AI]", border_style="green"))
+            else:
+                console.print(json.dumps(res_json, indent=2, ensure_ascii=False))
+        except Exception as e:
+            console.print(f"[bold red]❌ Error terhubung ke Cloud AI: {e}[/bold red]")
 
-
-BANNER = r"""
- ██╗  ██╗████████╗ ██████╗ ██╗     ███████╗
-╚██╗██╔╝╚══██╔══╝██╔═══██╗██║     ██╔════╝
- ╚███╔╝    ██║   ██║   ██║██║     ███████╗
- ██╔██╗    ██║   ██║   ██║██║     ╚╚╚╚╚██║
-██╔╝ ██╗   ██║   ╚██████╔╝███████╗███████║
-╚═╝  ╚═╝   ╚═╝    ╚═════╝ ╚══════╝╚══════╝                                                     
-Tols By RendiSec 
-"""
 
 MENU = [
     ("Cari profil nomor        (nama pemilik)", "profile"),
@@ -953,7 +851,7 @@ MENU = [
 
 def ask(prompt: str) -> str:
     try:
-        return input(prompt).strip()
+        return console.input(prompt).strip()
     except EOFError:
         return "0"
 
@@ -961,61 +859,81 @@ def ask(prompt: str) -> str:
 def check_login() -> bool:
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
-        print(BANNER)
-        print("=== AUTENTIKASI LOGIN DIPERLUKAN ===\n")
-        password = input("Masukkan sandi login: ").strip()
+        os.system('clear' if os.name == 'posix' else 'cls')
+        console.print(Panel(
+            f"{CYBER_BANNER}\n[center]{SUB_BANNER}[/center]",
+            border_style="bright_magenta",
+            box=rich.box.DOUBLE,
+            padding=(1, 2)
+        ))
+        
+        password = console.input("[bold yellow]🔐 Masukkan sandi login: [/bold yellow]").strip()
         if password == LOGIN_PASSWORD:
-            print("\n[+] Login Berhasil! Selamat datang.\n")
+            console.print("\n[bold green]✅ Login Berhasil! Selamat datang, RendiSec.[/bold green]\n")
             time.sleep(1)
             return True
         else:
             remaining = max_attempts - attempt
-            print(f"\n[-] Sandi salah! Sisa percobaan: {remaining}")
+            console.print(f"\n[bold red]❌ Sandi salah! Sisa percobaan: {remaining}[/bold red]")
             if remaining > 0:
                 time.sleep(1.5)
             else:
-                print("[-] Batas percobaan habis. Akses ditolak.")
+                console.print("[bold red]❌ Batas percobaan habis. Akses ditolak.[/bold red]")
                 return False
     return False
 
 
 def interactive() -> int:
     while True:
-        print(BANNER)
+        os.system('clear' if os.name == 'posix' else 'cls')
+        console.print(Panel(
+            f"{CYBER_BANNER}\n[center]{SUB_BANNER}[/center]",
+            border_style="bright_magenta",
+            box=rich.box.DOUBLE,
+            padding=(1, 2)
+        ))
+        
         store = load_store() if CRED_FILE.exists() else {}
         active = store.get("active") or "Belum ada"
-        print(f"Status Akun Aktif: {active}\n")
-        print("Pilih fitur:")
-        for i, (label, _) in enumerate(MENU, 1):
-            print(f"  {i:02d}. {label}")
-        print("  00. Keluar\n")
+        console.print(f"[bold cyan]👤 Status Akun Aktif:[/bold cyan] [bold yellow]{active}[/bold yellow]\n")
         
-        choice = ask("Nomor pilihan: ")
+        # Daftar menu dalam Kotak Panel
+        menu_lines = []
+        for i, (label, _) in enumerate(MENU, 1):
+            menu_lines.append(f"  [bright_cyan]{i:02d}.[/bright_cyan] [white]{label}[/white]")
+        menu_lines.append("  [bright_red]00.[/bright_red] [bold red]Keluar[/bold red]")
+        
+        console.print(Panel(
+            "\n".join(menu_lines),
+            title="[bold bright_magenta]📋 XTOLS MAIN MENU[/bold bright_magenta]",
+            border_style="bright_yellow",
+            box=rich.box.ROUNDED,
+            padding=(1, 2)
+        ))
+        console.print()
+        
+        choice = ask("[bold yellow]➤ Nomor pilihan: [/bold yellow]")
         if choice in ("0", "00", "q", "keluar", ""):
-            print("Keluar...")
+            console.print("[bold cyan]Keluar dari program. Terima kasih![/bold cyan]")
             return 0
         try:
             idx = int(choice) - 1
             if not (0 <= idx < len(MENU)):
-                print("Pilihan tidak valid.\n")
+                console.print("[bold red]Pilihan tidak valid.[/bold red]\n")
+                time.sleep(1)
                 continue
         except ValueError:
-            print("Masukkan angka.\n")
+            console.print("[bold red]Masukkan angka yang benar.[/bold red]\n")
+            time.sleep(1)
             continue
 
         action = MENU[idx][1]
         try:
-            if action == "credits":
-                print("\n" + "=" * 40)
-                print("         CREDITS PEMBUAT TOOLS")
-                print("=" * 40)
-                print("  • RendiSec")
-                print("  • VynnGrup")
-                print("  • PutraWibu")
-                print("  • GeminiAi")
-                print("  • XynnHd")
-                print("  • Xynaa")
-                print("=" * 40)
+            if action == "cctvhack":
+                menu_cctv_hack()
+            elif action == "credits":
+                show_xtols_banner("CREDITS PEMBUAT TOOLS")
+                console.print(Panel("• [cyan]RendiSec[/cyan]\n• [cyan]VynnGrup[/cyan]\n• [cyan]PutraWibu[/cyan]\n• [cyan]GeminiAi[/cyan]\n• [cyan]XynnHd[/cyan]\n• [cyan]Xynaa[/cyan]", border_style="magenta"))
             elif action == "profile":
                 menu_search("profile")
             elif action == "tags":
@@ -1036,21 +954,16 @@ def interactive() -> int:
                 menu_track_phone_number()
             elif action == "tracksocial":
                 menu_track_social()
-            elif action == "cctvhack":
-                menu_cctv_hack()
             elif action == "cloud_ai":
                 menu_ai_chat()
                 
-            input("\nTekan Enter untuk kembali ke menu... ")
-            print("\n" * 2)
+            console.input("\n[bold green]Tekan Enter untuk kembali ke menu... [/bold green]")
         except GtcError as e:
-            print(f"\n[Error] {e}")
-            input("\nTekan Enter untuk kembali ke menu... ")
-            print("\n" * 2)
+            console.print(f"\n[bold red][Error] {e}[/bold red]")
+            console.input("\n[bold yellow]Tekan Enter untuk kembali ke menu... [/bold yellow]")
         except Exception as e:
-            print(f"\n[Unexpected Error] {e}")
-            input("\nTekan Enter untuk kembali ke menu... ")
-            print("\n" * 2)
+            console.print(f"\n[bold red][Unexpected Error] {e}[/bold red]")
+            console.input("\n[bold yellow]Tekan Enter untuk kembali ke menu... [/bold yellow]")
 
 
 def main() -> int:
