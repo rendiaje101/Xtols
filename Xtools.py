@@ -583,9 +583,8 @@ def menu_track_ip():
     else:
         console.print(f"[bold red][-] Gagal melacak IP tersebut: {result.get('message', 'Tidak diketahui')}[/bold red]")
 
-
 def menu_track_phone_number():
-    show_xtols_banner("TRACK NOMOR TELEPON (OPERATOR & WILAYAH)")
+    show_xtols_banner("TRACK NOMOR TELEPON (OPERATOR, WILAYAH)")
     number = console.input("[bold yellow]➤ Masukkan nomor telepon Indonesia: [/bold yellow]").strip()
     if not number:
         console.print("[bold red]⚠️ Mohon sertakan nomor telepon.[/bold red]")
@@ -597,53 +596,197 @@ def menu_track_phone_number():
 
     prefix = cleaned[:5]
     provider_map = {
-        "62811": {"provider": "Telkomsel (Kartu Halo)", "region": "Nasional"},
-        "62812": {"provider": "Telkomsel (simPATI)", "region": "Jabodetabek"},
-        "62813": {"provider": "Telkomsel (simPATI)", "region": "Jawa Timur"},
-        "62821": {"provider": "Telkomsel (Kartu AS)", "region": "Jawa Tengah"},
-        "62822": {"provider": "Telkomsel (Kartu AS)", "region": "Bali & Nusa Tenggara"},
-        "62823": {"provider": "Telkomsel (Loop)", "region": "Sumatera"},
-        "62814": {"provider": "Indosat (IM3)", "region": "Jabodetabek"},
-        "62815": {"provider": "Indosat (Mentari)", "region": "Jawa Barat"},
-        "62816": {"provider": "Indosat (Matrix)", "region": "Nasional"},
-        "62855": {"provider": "Indosat (IM3 Ooredoo)", "region": "Jawa Tengah"},
-        "62856": {"provider": "Indosat (IM3 Ooredoo)", "region": "Jawa Timur"},
-        "62857": {"provider": "Indosat (IM3 Ooredoo)", "region": "Kalimantan"},
-        "62858": {"provider": "Indosat (IM3 Ooredoo)", "region": "Sulawesi"},
-        "62817": {"provider": "XL Axiata", "region": "Jabodetabek"},
-        "62818": {"provider": "XL Axiata", "region": "Jawa Tengah & Timur"},
-        "62819": {"provider": "XL Axiata", "region": "Sumatera & Kalimantan"},
-        "62859": {"provider": "XL Prabayar", "region": "Nasional"},
-        "62877": {"provider": "XL Prabayar", "region": "Jawa Barat"},
-        "62878": {"provider": "XL Prabayar", "region": "Bali, NTB, NTT"},
-        "62895": {"provider": "Tri (3)", "region": "Jakarta"},
-        "62896": {"provider": "Tri (3)", "region": "Jawa Tengah"},
-        "62897": {"provider": "Tri (3)", "region": "Jawa Timur"},
-        "62898": {"provider": "Tri (3)", "region": "Sumatera"},
-        "62899": {"provider": "Tri (3)", "region": "Sulawesi"},
-        "62881": {"provider": "Smartfren", "region": "Jabodetabek"},
-        "62882": {"provider": "Smartfren", "region": "Jawa Barat"},
-        "62883": {"provider": "Smartfren", "region": "Jawa Tengah"},
-        "62884": {"provider": "Smartfren", "region": "Nasional"},
-        "62831": {"provider": "Axis", "region": "Jabodetabek"},
-        "62832": {"provider": "Axis", "region": "Jawa Tengah"},
-        "62833": {"provider": "Axis", "region": "Jawa Timur"},
-        "62838": {"provider": "Axis", "region": "Sumatera"},
-        "62851": {"provider": "By.U (Telkomsel Digital)", "region": "Online / Nasional"}
+        "62811": {
+            "provider": "Telkomsel (Kartu Halo)", 
+            "region": "Nasional", 
+            "wilayah": "Seluruh Indonesia (Pascabayar)"
+        },
+        "62812": {
+            "provider": "Telkomsel (simPATI)", 
+            "region": "Jabodetabek", 
+            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
+        },
+        "62813": {
+            "provider": "Telkomsel (simPATI)", 
+            "region": "Jawa Timur", 
+            "wilayah": "Surabaya, Malang, Sidoarjo, Madura, Kediri"
+        },
+        "62821": {
+            "provider": "Telkomsel (Kartu AS)", 
+            "region": "Jawa Tengah", 
+            "wilayah": "Semarang, Solo, Yogyakarta, Purwokerto"
+        },
+        "62822": {
+            "provider": "Telkomsel (Kartu AS)", 
+            "region": "Bali & Nusa Tenggara", 
+            "wilayah": "Denpasar, Mataram, Kupang"
+        },
+        "62823": {
+            "provider": "Telkomsel (Loop)", 
+            "region": "Sumatera", 
+            "wilayah": "Medan, Palembang, Pekanbaru, Padang"
+        },
+        "62852": {
+            "provider": "Telkomsel (AS)", 
+            "region": "Sulawesi & Kalimantan", 
+            "wilayah": "Makassar, Manado, Balikpapan, Banjarmasin"
+        },
+        "62853": {
+            "provider": "Telkomsel (AS)", 
+            "region": "Sumatera & Maluku", 
+            "wilayah": "Medan, Banda Aceh, Ambon, Jayapura"
+        },
+        "62814": {
+            "provider": "Indosat (IM3)", 
+            "region": "Jabodetabek", 
+            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"            
+        },
+        "62815": {
+            "provider": "Indosat (Mentari)", 
+            "region": "Jawa Barat", 
+            "wilayah": "Bandung, Cimahi, Sukabumi, Cirebon"
+        },
+        "62816": {
+            "provider": "Indosat (Matrix)", 
+            "region": "Nasional", 
+            "wilayah": "Seluruh Indonesia (Pascabayar)"
+        },
+        "62855": {
+            "provider": "Indosat (IM3 Ooredoo)", 
+            "region": "Jawa Tengah", 
+            "wilayah": "Semarang, Surakarta, Tegal"
+        },
+        "62856": {
+            "provider": "Indosat (IM3 Ooredoo)", 
+            "region": "Jawa Timur", 
+            "wilayah": "Surabaya, Malang, Jember"
+        },
+        "62857": {
+            "provider": "Indosat (IM3 Ooredoo)", 
+            "region": "Kalimantan & Jawa", 
+            "wilayah": "Banjarmasin, Pontianak, Samarinda"            
+        },
+        "62858": {
+            "provider": "Indosat (IM3 Ooredoo)", 
+            "region": "Sulawesi & Sumatera", 
+            "wilayah": "Makassar, Medan, Palembang"
+        },
+        "62817": {
+            "provider": "XL Axiata", 
+            "region": "Jabodetabek", 
+            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
+        },
+        "62818": {
+            "provider": "XL Axiata", 
+            "region": "Jawa Tengah & Timur", 
+            "wilayah": "Semarang, Yogyakarta, Surabaya"
+        },
+        "62819": {
+            "provider": "XL Axiata", 
+            "region": "Sumatera & Kalimantan", 
+            "wilayah": "Medan, Pekanbaru, Pontianak"
+        },
+        "62859": {
+            "provider": "XL Prabayar", 
+            "region": "Nasional", 
+            "wilayah": "Jaringan Utama Nasional XL"
+        },
+        "62877": {
+            "provider": "XL Prabayar", 
+            "region": "Jawa Barat", 
+            "wilayah": "Bandung, Bogor, Tasikmalaya, Cirebon"
+        },
+        "62878": {
+            "provider": "XL Prabayar", 
+            "region": "Bali, NTB, NTT", 
+            "wilayah": "Denpasar, Mataram, Kupang"
+        },
+        "62895": {
+            "provider": "Tri (3)", 
+            "region": "Jakarta", 
+            "wilayah": "Jakarta & Sekitarnya"
+        },
+        "62896": {
+            "provider": "Tri (3)", 
+            "region": "Jawa Tengah", 
+            "wilayah": "Semarang, Surakarta, Tegal"
+        },
+        "62897": {
+            "provider": "Tri (3)", 
+            "region": "Jawa Timur", 
+            "wilayah": "Surabaya, Malang, Sidoarjo"
+        },
+        "62898": {
+            "provider": "Tri (3)", 
+            "region": "Sumatera", 
+            "wilayah": "Medan, Palembang, Bandar Lampung"
+        },
+        "62899": {
+            "provider": "Tri (3)", 
+            "region": "Sulawesi", 
+            "wilayah": "Makassar, Manado, Kendari"
+        },
+        "62881": {
+            "provider": "Smartfren", 
+            "region": "Jabodetabek", 
+            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
+        },
+        "62882": {
+            "provider": "Smartfren", 
+            "region": "Jawa Barat", 
+            "wilayah": "Bandung, Cimahi, Sukabumi"
+        },
+        "62883": {
+            "provider": "Smartfren", 
+            "region": "Jawa Tengah", 
+            "wilayah": "Semarang, Yogyakarta, Surakarta"
+        },
+        "62884": {
+            "provider": "Smartfren", 
+            "region": "Nasional", 
+            "wilayah": "Cakupan Nasional Smartfren"
+        },
+        "62831": {
+            "provider": "Axis", 
+            "region": "Jabodetabek", 
+            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
+        },
+        "62832": {
+            "provider": "Axis", 
+            "region": "Jawa Tengah", 
+            "wilayah": "Semarang, Solo, Yogyakarta"
+        },
+        "62833": {
+            "provider": "Axis", 
+            "region": "Jawa Timur", 
+            "wilayah": "Surabaya, Malang, Kediri"
+        },
+        "62838": {
+            "provider": "Axis", 
+            "region": "Sumatera", 
+            "wilayah": "Medan, Batam, Padang"
+        },
+        "62851": {
+            "provider": "By.U (Telkomsel Digital)", 
+            "region": "Online / Nasional", 
+            "wilayah": "Seluruh Indonesia (Berbasis Digital)"
+        }
     }
 
-    info = provider_map.get(prefix, {"provider": "Tidak diketahui / prefix tidak umum", "region": "Tidak tersedia"})
+    info = provider_map.get(prefix, {"provider": "Tidak diketahui / prefix khusus", "region": "Tidak tersedia", "wilayah": "Wilayah tidak terdefinisi"})
     tipe = 'Pascabayar' if re.search(r'(halo|matrix)', info["provider"], re.IGNORECASE) else 'Prabayar'
     
-    table = Table(title=f"Analisa Nomor: +{cleaned}", show_header=True, header_style="bold yellow")
+    table = Table(title=f"Analisa Nomor Telepon: +{cleaned}", show_header=True, header_style="bold yellow")
     table.add_column("Atribut", style="cyan")
-    table.add_column("Hasil", style="white")
+    table.add_column("Hasil Detail", style="white")
     
-    table.add_row("Operator", info["provider"])
-    table.add_row("Prefix", prefix)
+    table.add_row("Nomor Lengkap", f"+{cleaned}")
+    table.add_row("Prefix Operator", prefix)
+    table.add_row("Operator Seluler", info["provider"])
     table.add_row("Tipe Layanan", tipe)
-    table.add_row("Wilayah", info["region"])
-    table.add_row("Negara", "Indonesia")
+    table.add_row("Region Utama", info["region"])
+    table.add_row("Perkiraan Wilayah / Kota", info["wilayah"])
+    table.add_row("Negara", "Indonesia (ID)")
     console.print(table)
 
 
@@ -1070,4 +1213,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main())   
