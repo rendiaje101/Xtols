@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 import base64
+import codecs
 import csv
 import hashlib
 import hmac
+import html
 import json
 import os
 import random
@@ -19,6 +21,7 @@ import time
 import urllib.parse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any
 
 import requests
 from colorama import init
@@ -36,6 +39,21 @@ console = Console()
 #  config
 GTC_BASE = "https://pbssrv-centralevents.com"
 VFK_BASE = "https://api.verifykit.com"
+WEB_SOURCE_API = "https://www.apiii-putzyy.my.id/api/tools/source"
+WEB_SOURCE_DEFAULT_KEY = "Putzyy"
+WEB_SOURCE_KEYS = (
+    "source",
+    "html",
+    "code",
+    "content",
+    "body",
+    "data",
+    "result",
+    "response",
+    "text",
+    "raw",
+)
+
 HMAC_KEY = "31426764382a642f3a6665497235466f3d236d5d785b722b4c657457442a495b494524324866782a2364292478587a78662d7a7b7578593f71703e2b7e365762"
 VFK_HMAC_KEY = "3452235d713252604a35562d325f765238695738485863672a705e6841544d3c7e6e45463028266f372b544e596f3829236b392825262e534a7e774f37653932"
 VFK_CLIENT_KEY = "bhvbd7ced119dc6ad6a0b35bd3cf836555d6f71930d9e5a405f32105c790d"
@@ -150,7 +168,7 @@ def vfk_call(endpoint: str, payload: dict, device_id: str) -> tuple[int, dict]:
         "X-VFK-Client-Key": VFK_CLIENT_KEY,
         "X-VFK-Sdk-Version": "0.11.4",
         "X-VFK-Os": "android 9.0",
-        "X-VFK-App-Version": "8.16.0",         
+        "X-VFK-App-Version": "8.16.0",
         "X-VFK-Encrypted": "1",
         "X-VFK-Lang": "in_ID",
         "X-VFK-Req-Timestamp": ts,
@@ -208,6 +226,139 @@ def normalize_phone(raw: str) -> str:
     if p.startswith("62"):
         return "+" + p
     raise GtcError(f"Invalid phone number: {raw}")
+
+
+def normalize_web_url(raw_url: str) -> str:
+    cleaned = raw_url.strip()
+    if not cleaned:
+        raise GtcError("URL target tidak boleh kosong.")
+    if not cleaned.startswith(("http://", "https://")):
+        cleaned = f"https://{cleaned}"
+    return cleaned
+
+
+def decode_escaped_source(text: str) -> str:
+    decoded = text
+    if any(token in decoded for token in ("\\n", "\\t", "\\/", "\\u", '\\"')):
+        try:
+            decoded = codecs.decode(decoded, "unicode_escape")
+        except Exception:
+            decoded = (
+                decoded.replace("\\r\\n", "\n")
+                .replace("\\n", "\n")
+                .replace("\\r", "\n")
+                .replace("\\t", "\t")
+                .replace('\\"', '"')
+                .replace("\\/", "/")
+            )
+    return decoded
+
+
+def extract_web_source(payload: Any) -> str:
+    if isinstance(payload, dict):
+        for key in WEB_SOURCE_KEYS:
+            if key in payload and payload[key] is not None:
+                val = payload[key]
+                if isinstance(val, str) and (
+                    "<html" in val.lower()
+                    or "<!doctype" in val.lower()
+                    or "<" in val
+                    or len(val) > 100
+                ):
+                    return decode_escaped_source(val)
+                if isinstance(val, (dict, list)):
+                    nested = extract_web_source(val)
+                    if nested:
+                        return nested
+
+        best_candidate = ""
+        for val in payload.values():
+            if isinstance(val, (dict, list)):
+                candidate = extract_web_source(val)
+            elif isinstance(val, str):
+                candidate = val
+            else:
+                candidate = ""
+            if len(candidate) > len(best_candidate):
+                best_candidate = candidate
+        if best_candidate:
+            return decode_escaped_source(best_candidate)
+
+        return json.dumps(payload, indent=2, ensure_ascii=False)
+
+    if isinstance(payload, list):
+        parts: list[str] = []
+        for item in payload:
+            extracted = extract_web_source(item)
+            if extracted:
+                parts.append(extracted)
+        return "\n".join(parts)
+
+    if isinstance(payload, str):
+        return decode_escaped_source(payload)
+
+    return str(payload)
+
+
+def format_vertical_source_lines(
+    source_code: str,
+    pretty_html: bool = True,
+    max_width: int = 120,
+    unescape_entities: bool = False,
+) -> list[str]:
+    content = source_code.replace("\r\n", "\n").replace("\r", "\n")
+    if unescape_entities:
+        content = html.unescape(content)
+
+    if pretty_html and content.count("\n") <= 2 and "><" in content:
+        content = re.sub(r">\s*<", ">\n<", content)
+
+    raw_lines = content.split("\n")
+    vertical_lines: list[str] = []
+
+    for line in raw_lines:
+        if max_width > 0 and len(line) > max_width:
+            for start in range(0, len(line), max_width):
+                vertical_lines.append(line[start : start + max_width])
+        else:
+            vertical_lines.append(line)
+
+    return vertical_lines
+
+
+def fetch_web_source_api(
+    target_url: str,
+    api_key: str = WEB_SOURCE_DEFAULT_KEY,
+    timeout: int = 30,
+) -> dict[str, Any]:
+    normalized = normalize_web_url(target_url)
+    params = {
+        "url": normalized,
+        "apikey": api_key,
+    }
+    resp = requests.get(WEB_SOURCE_API, params=params, timeout=timeout)
+    resp.raise_for_status()
+
+    raw_text = resp.text
+    parsed_json: Any = None
+    is_json = False
+
+    try:
+        parsed_json = json.loads(raw_text)
+        is_json = True
+    except json.JSONDecodeError:
+        parsed_json = None
+        is_json = False
+
+    full_source = extract_web_source(parsed_json if is_json else raw_text)
+    return {
+        "request_url": resp.url,
+        "target_url": normalized,
+        "status_code": resp.status_code,
+        "is_json_wrapper": is_json,
+        "raw_response": raw_text,
+        "full_source": full_source,
+    }
 
 
 #  features logic
@@ -276,6 +427,71 @@ def show_xtols_banner(title_text: str):
     console.print()
 
 
+def menu_web_source():
+    show_xtols_banner("FULL WEB SOURCE FETCHER (VERTICAL / NO CUT)")
+    raw_url = console.input("[bold yellow]➤ Masukkan URL target (default: google.com): [/bold yellow]").strip()
+    target_url = raw_url or "google.com"
+
+    raw_key = console.input(f"[bold yellow]➤ Masukkan API Key (default: {WEB_SOURCE_DEFAULT_KEY}): [/bold yellow]").strip()
+    api_key = raw_key or WEB_SOURCE_DEFAULT_KEY
+
+    width_raw = console.input("[bold yellow]➤ Lebar karakter per baris ke bawah (default: 120, 0 = tanpa wrap): [/bold yellow]").strip()
+    try:
+        max_width = int(width_raw) if width_raw else 120
+        if max_width < 0:
+            raise GtcError("Lebar baris tidak boleh negatif.")
+    except ValueError:
+        raise GtcError("Lebar baris harus berupa angka bulat.")
+
+    pretty_choice = console.input("[bold yellow]➤ Pecah tag HTML berdempetan agar rapi ke bawah? (y/n, default: y): [/bold yellow]").strip().lower()
+    pretty_html = pretty_choice not in ("n", "no", "tidak", "t")
+
+    number_choice = console.input("[bold yellow]➤ Tampilkan nomor urut tiap baris? (y/n, default: y): [/bold yellow]").strip().lower()
+    numbered = number_choice not in ("n", "no", "tidak", "t")
+
+    with console.status(f"[bold cyan]Mengambil full source untuk {normalize_web_url(target_url)}...[/bold cyan]", spinner="dots"):
+        try:
+            res = fetch_web_source_api(target_url=target_url, api_key=api_key)
+        except Exception as exc:
+            raise GtcError(f"Gagal mengambil source web: {exc}")
+
+    lines = format_vertical_source_lines(
+        source_code=res["full_source"],
+        pretty_html=pretty_html,
+        max_width=max_width,
+        unescape_entities=False,
+    )
+
+    console.print(
+        f"[bold green][+] Status HTTP:[/bold green] {res['status_code']} | "
+        f"[bold cyan]Total Karakter:[/bold cyan] {len(res['full_source'])} | "
+        f"[bold yellow]Total Baris:[/bold yellow] {len(lines)}\n"
+    )
+
+    for idx, line in enumerate(lines, start=1):
+        if numbered:
+            sys.stdout.write(f"{idx:05d} | {line}\n")
+        else:
+            sys.stdout.write(f"{line}\n")
+    sys.stdout.flush()
+
+    save_choice = console.input("\n[bold yellow]➤ Simpan hasil lengkap ke file? (y/n, default: y): [/bold yellow]").strip().lower()
+    if save_choice not in ("n", "no", "tidak", "t"):
+        RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+        safe_slug = urllib.parse.quote_plus(res["target_url"])
+        default_path = RESULTS_DIR / f"source_{safe_slug}.html"
+        custom_path = console.input(f"[bold yellow]➤ Path/nama file (default: {default_path}): [/bold yellow]").strip()
+        out_path = Path(custom_path) if custom_path else default_path
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(out_path, "w", encoding="utf-8") as fh:
+            for idx, line in enumerate(lines, start=1):
+                if numbered:
+                    fh.write(f"{idx:05d} | {line}\n")
+                else:
+                    fh.write(f"{line}\n")
+        console.print(f"[bold green]✅ Hasil lengkap berhasil disimpan ke: {out_path}[/bold green]")
+
+
 #  Direct Menu Functions
 def menu_search(source_type: str):
     title = "CARI PROFIL NOMOR (NAMA PEMILIK)" if source_type == "profile" else "CARI TAG NOMOR (NAMA TERSIMPAN)"
@@ -284,10 +500,10 @@ def menu_search(source_type: str):
     _, cred = get_cred(store, None)
     raw_phone = console.input("[bold yellow]➤ Masukkan nomor telepon: [/bold yellow]").strip()
     phone = normalize_phone(raw_phone)
-    
+
     with console.status(f"[bold cyan]Mencari data untuk {phone}...[/bold cyan]", spinner="dots"):
         body = api_search(cred, phone, source_type)
-    
+
     console.print("\n[bold green]--- HASIL PENCARIAN ---[/bold green]")
     profile = dig(body, "result.profile")
     if profile:
@@ -297,7 +513,7 @@ def menu_search(source_type: str):
         for k in ("displayName", "name", "surname", "phoneNumber", "displayNumber", "tagCount", "email"):
             table.add_row(k, str(profile.get(k) or '-'))
         console.print(table)
-        
+
     tags = dig(body, "result.tags")
     if tags:
         console.print(f"\n[bold cyan]Tags ({len(tags)}):[/bold cyan]")
@@ -307,7 +523,7 @@ def menu_search(source_type: str):
         for t in tags:
             tag_table.add_row(t.get('tag', '-'), str(t.get('count', '')))
         console.print(tag_table)
-        
+
     if not profile and not tags:
         console.print(json.dumps(body, indent=2, ensure_ascii=False))
     console.print("[bold green]-----------------------[/bold green]")
@@ -317,20 +533,20 @@ def menu_quota():
     show_xtols_banner("SISA KUOTA AKUN")
     store = load_store()
     name, cred = get_cred(store, None)
-    
+
     with console.status("[bold cyan]Memuat informasi kuota...[/bold cyan]", spinner="dots"):
         body = api_subscription(cred)
-        
+
     u = dig(body, "result.subscriptionInfo.usage") or {}
-    
+
     table = Table(title=f"Kuota Akun: {name}", show_header=True, header_style="bold cyan")
     table.add_column("Fitur", style="yellow")
     table.add_column("Sisa / Limit", style="green")
-    
+
     for key in ("search", "numberDetail"):
         d = u.get(key) or {}
         table.add_row(key, f"{d.get('remainingCount', '?')} / {d.get('limit', '?')}")
-        
+
     console.print(table)
     renew = dig(body, 'result.subscriptionInfo.renewDate', '-')
     console.print(f"[bold dim]📅 Renew Date: {renew}[/bold dim]\n")
@@ -344,20 +560,20 @@ def menu_batch():
     if not os.path.exists(csv_path):
         console.print("[bold red]❌ File CSV tidak ditemukan![/bold red]")
         return
-    
+
     with open(csv_path, newline="", encoding="utf-8-sig") as fh:
         rows = list(csv.reader(fh))
     if not rows:
         console.print("[bold red]❌ File CSV kosong![/bold red]")
         return
-        
+
     header = rows[0]
     col = 0
     if any(h.strip().lower() in ("phone", "phone_number", "phonenumber", "nomor") for h in header):
         col = next(i for i, h in enumerate(header)
                    if h.strip().lower() in ("phone", "phone_number", "phonenumber", "nomor"))
         rows = rows[1:]
-        
+
     console.print("\n[bold cyan]🚀 Memulai pencarian batch...[/bold cyan]\n")
     for row in rows:
         if not row or not row[col].strip():
@@ -411,18 +627,18 @@ def menu_cred_list():
     if not creds:
         console.print("[yellow]⚠️ Belum ada akun tersimpan.[/yellow]")
         return
-        
+
     table = Table(title="Daftar Akun Tersimpan", show_header=True, header_style="bold magenta")
     table.add_column("Status", style="green", justify="center")
     table.add_column("Nama Akun", style="cyan")
     table.add_column("Nomor Telepon", style="yellow")
     table.add_column("Keterangan", style="white")
-    
+
     for name, c in creds.items():
         mark = "⭐ AKTIF" if name == store.get("active") else ""
         table.add_row(mark, name, c.get('phoneNumber', '-'), c.get('description', ''))
     console.print(table)
-    
+
     sub_opt = console.input("\n[bold yellow]➤ Ketik nama akun untuk dijadikan aktif (kosongkan untuk batal): [/bold yellow]").strip()
     if sub_opt:
         if sub_opt in creds:
@@ -505,7 +721,7 @@ def menu_generate():
             "countryCode": "ID", "mcc": CARRIER[0], "mnc": CARRIER[2],
             "phoneNumber": phone, "app": "whatsapp", "bundleId": BUNDLE_ID,
         }, device_id)
-    
+
     deeplink = dig(body, "result.deeplink")
     reference = dig(body, "result.reference")
     if not deeplink or not reference:
@@ -553,10 +769,10 @@ def menu_track_ip():
     if not target:
         console.print("[bold red]❌ Target tidak boleh kosong![/bold red]")
         return
-        
+
     url = f"http://ip-api.com/json/{target}"
     fields = "status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query"
-    
+
     with console.status(f"[bold cyan]Melacak informasi untuk {target}...[/bold cyan]", spinner="dots"):
         try:
             response = requests.get(url, params={"fields": fields}, timeout=15)
@@ -565,12 +781,12 @@ def menu_track_ip():
         except Exception as e:
             console.print(f"[bold red]❌ Koneksi gagal: {e}[/bold red]")
             return
-            
+
     if result.get("status") == "success":
         table = Table(title=f"Hasil Pelacakan: {result.get('query')}", show_header=True, header_style="bold green")
         table.add_column("Parameter", style="cyan")
         table.add_column("Detail", style="white")
-        
+
         table.add_row("Negara", f"{result.get('country')} ({result.get('countryCode')})")
         table.add_row("Wilayah", f"{result.get('regionName')} ({result.get('region')})")
         table.add_row("Kota", str(result.get('city')))
@@ -582,6 +798,7 @@ def menu_track_ip():
         console.print(table)
     else:
         console.print(f"[bold red][-] Gagal melacak IP tersebut: {result.get('message', 'Tidak diketahui')}[/bold red]")
+
 
 def menu_track_phone_number():
     show_xtols_banner("TRACK NOMOR TELEPON (OPERATOR, WILAYAH)")
@@ -597,189 +814,189 @@ def menu_track_phone_number():
     prefix = cleaned[:5]
     provider_map = {
         "62811": {
-            "provider": "Telkomsel (Kartu Halo)", 
-            "region": "Nasional", 
+            "provider": "Telkomsel (Kartu Halo)",
+            "region": "Nasional",
             "wilayah": "Seluruh Indonesia (Pascabayar)"
         },
         "62812": {
-            "provider": "Telkomsel (simPATI)", 
-            "region": "Jabodetabek", 
+            "provider": "Telkomsel (simPATI)",
+            "region": "Jabodetabek",
             "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
         },
         "62813": {
-            "provider": "Telkomsel (simPATI)", 
-            "region": "Jawa Timur", 
+            "provider": "Telkomsel (simPATI)",
+            "region": "Jawa Timur",
             "wilayah": "Surabaya, Malang, Sidoarjo, Madura, Kediri"
         },
         "62821": {
-            "provider": "Telkomsel (Kartu AS)", 
-            "region": "Jawa Tengah", 
+            "provider": "Telkomsel (Kartu AS)",
+            "region": "Jawa Tengah",
             "wilayah": "Semarang, Solo, Yogyakarta, Purwokerto"
         },
         "62822": {
-            "provider": "Telkomsel (Kartu AS)", 
-            "region": "Bali & Nusa Tenggara", 
+            "provider": "Telkomsel (Kartu AS)",
+            "region": "Bali & Nusa Tenggara",
             "wilayah": "Denpasar, Mataram, Kupang"
         },
         "62823": {
-            "provider": "Telkomsel (Loop)", 
-            "region": "Sumatera", 
+            "provider": "Telkomsel (Loop)",
+            "region": "Sumatera",
             "wilayah": "Medan, Palembang, Pekanbaru, Padang"
         },
         "62852": {
-            "provider": "Telkomsel (AS)", 
-            "region": "Sulawesi & Kalimantan", 
+            "provider": "Telkomsel (AS)",
+            "region": "Sulawesi & Kalimantan",
             "wilayah": "Makassar, Manado, Balikpapan, Banjarmasin"
         },
         "62853": {
-            "provider": "Telkomsel (AS)", 
-            "region": "Sumatera & Maluku", 
+            "provider": "Telkomsel (AS)",
+            "region": "Sumatera & Maluku",
             "wilayah": "Medan, Banda Aceh, Ambon, Jayapura"
         },
         "62814": {
-            "provider": "Indosat (IM3)", 
-            "region": "Jabodetabek", 
-            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"            
+            "provider": "Indosat (IM3)",
+            "region": "Jabodetabek",
+            "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
         },
         "62815": {
-            "provider": "Indosat (Mentari)", 
-            "region": "Jawa Barat", 
+            "provider": "Indosat (Mentari)",
+            "region": "Jawa Barat",
             "wilayah": "Bandung, Cimahi, Sukabumi, Cirebon"
         },
         "62816": {
-            "provider": "Indosat (Matrix)", 
-            "region": "Nasional", 
+            "provider": "Indosat (Matrix)",
+            "region": "Nasional",
             "wilayah": "Seluruh Indonesia (Pascabayar)"
         },
         "62855": {
-            "provider": "Indosat (IM3 Ooredoo)", 
-            "region": "Jawa Tengah", 
+            "provider": "Indosat (IM3 Ooredoo)",
+            "region": "Jawa Tengah",
             "wilayah": "Semarang, Surakarta, Tegal"
         },
         "62856": {
-            "provider": "Indosat (IM3 Ooredoo)", 
-            "region": "Jawa Timur", 
+            "provider": "Indosat (IM3 Ooredoo)",
+            "region": "Jawa Timur",
             "wilayah": "Surabaya, Malang, Jember"
         },
         "62857": {
-            "provider": "Indosat (IM3 Ooredoo)", 
-            "region": "Kalimantan & Jawa", 
-            "wilayah": "Banjarmasin, Pontianak, Samarinda"            
+            "provider": "Indosat (IM3 Ooredoo)",
+            "region": "Kalimantan & Jawa",
+            "wilayah": "Banjarmasin, Pontianak, Samarinda"
         },
         "62858": {
-            "provider": "Indosat (IM3 Ooredoo)", 
-            "region": "Sulawesi & Sumatera", 
+            "provider": "Indosat (IM3 Ooredoo)",
+            "region": "Sulawesi & Sumatera",
             "wilayah": "Makassar, Medan, Palembang"
         },
         "62817": {
-            "provider": "XL Axiata", 
-            "region": "Jabodetabek", 
+            "provider": "XL Axiata",
+            "region": "Jabodetabek",
             "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
         },
         "62818": {
-            "provider": "XL Axiata", 
-            "region": "Jawa Tengah & Timur", 
+            "provider": "XL Axiata",
+            "region": "Jawa Tengah & Timur",
             "wilayah": "Semarang, Yogyakarta, Surabaya"
         },
         "62819": {
-            "provider": "XL Axiata", 
-            "region": "Sumatera & Kalimantan", 
+            "provider": "XL Axiata",
+            "region": "Sumatera & Kalimantan",
             "wilayah": "Medan, Pekanbaru, Pontianak"
         },
         "62859": {
-            "provider": "XL Prabayar", 
-            "region": "Nasional", 
+            "provider": "XL Prabayar",
+            "region": "Nasional",
             "wilayah": "Jaringan Utama Nasional XL"
         },
         "62877": {
-            "provider": "XL Prabayar", 
-            "region": "Jawa Barat", 
+            "provider": "XL Prabayar",
+            "region": "Jawa Barat",
             "wilayah": "Bandung, Bogor, Tasikmalaya, Cirebon"
         },
         "62878": {
-            "provider": "XL Prabayar", 
-            "region": "Bali, NTB, NTT", 
+            "provider": "XL Prabayar",
+            "region": "Bali, NTB, NTT",
             "wilayah": "Denpasar, Mataram, Kupang"
         },
         "62895": {
-            "provider": "Tri (3)", 
-            "region": "Jakarta", 
+            "provider": "Tri (3)",
+            "region": "Jakarta",
             "wilayah": "Jakarta & Sekitarnya"
         },
         "62896": {
-            "provider": "Tri (3)", 
-            "region": "Jawa Tengah", 
+            "provider": "Tri (3)",
+            "region": "Jawa Tengah",
             "wilayah": "Semarang, Surakarta, Tegal"
         },
         "62897": {
-            "provider": "Tri (3)", 
-            "region": "Jawa Timur", 
+            "provider": "Tri (3)",
+            "region": "Jawa Timur",
             "wilayah": "Surabaya, Malang, Sidoarjo"
         },
         "62898": {
-            "provider": "Tri (3)", 
-            "region": "Sumatera", 
+            "provider": "Tri (3)",
+            "region": "Sumatera",
             "wilayah": "Medan, Palembang, Bandar Lampung"
         },
         "62899": {
-            "provider": "Tri (3)", 
-            "region": "Sulawesi", 
+            "provider": "Tri (3)",
+            "region": "Sulawesi",
             "wilayah": "Makassar, Manado, Kendari"
         },
         "62881": {
-            "provider": "Smartfren", 
-            "region": "Jabodetabek", 
+            "provider": "Smartfren",
+            "region": "Jabodetabek",
             "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
         },
         "62882": {
-            "provider": "Smartfren", 
-            "region": "Jawa Barat", 
+            "provider": "Smartfren",
+            "region": "Jawa Barat",
             "wilayah": "Bandung, Cimahi, Sukabumi"
         },
         "62883": {
-            "provider": "Smartfren", 
-            "region": "Jawa Tengah", 
+            "provider": "Smartfren",
+            "region": "Jawa Tengah",
             "wilayah": "Semarang, Yogyakarta, Surakarta"
         },
         "62884": {
-            "provider": "Smartfren", 
-            "region": "Nasional", 
+            "provider": "Smartfren",
+            "region": "Nasional",
             "wilayah": "Cakupan Nasional Smartfren"
         },
         "62831": {
-            "provider": "Axis", 
-            "region": "Jabodetabek", 
+            "provider": "Axis",
+            "region": "Jabodetabek",
             "wilayah": "Jakarta, Bogor, Depok, Tangerang, Bekasi"
         },
         "62832": {
-            "provider": "Axis", 
-            "region": "Jawa Tengah", 
+            "provider": "Axis",
+            "region": "Jawa Tengah",
             "wilayah": "Semarang, Solo, Yogyakarta"
         },
         "62833": {
-            "provider": "Axis", 
-            "region": "Jawa Timur", 
+            "provider": "Axis",
+            "region": "Jawa Timur",
             "wilayah": "Surabaya, Malang, Kediri"
         },
         "62838": {
-            "provider": "Axis", 
-            "region": "Sumatera", 
+            "provider": "Axis",
+            "region": "Sumatera",
             "wilayah": "Medan, Batam, Padang"
         },
         "62851": {
-            "provider": "By.U (Telkomsel Digital)", 
-            "region": "Online / Nasional", 
+            "provider": "By.U (Telkomsel Digital)",
+            "region": "Online / Nasional",
             "wilayah": "Seluruh Indonesia (Berbasis Digital)"
         }
     }
 
     info = provider_map.get(prefix, {"provider": "Tidak diketahui / prefix khusus", "region": "Tidak tersedia", "wilayah": "Wilayah tidak terdefinisi"})
     tipe = 'Pascabayar' if re.search(r'(halo|matrix)', info["provider"], re.IGNORECASE) else 'Prabayar'
-    
+
     table = Table(title=f"Analisa Nomor Telepon: +{cleaned}", show_header=True, header_style="bold yellow")
     table.add_column("Atribut", style="cyan")
     table.add_column("Hasil Detail", style="white")
-    
+
     table.add_row("Nomor Lengkap", f"+{cleaned}")
     table.add_row("Prefix Operator", prefix)
     table.add_row("Operator Seluler", info["provider"])
@@ -890,19 +1107,19 @@ def menu_track_social():
 
 def menu_cctv_hack():
     os.system('clear' if os.name == 'posix' else 'cls')
-    
+
     cctv_banner = """[bold red]
    ██████╗██████╗ ████████╗██╗   ██╗
   ██╔════╝██╔══██╗╚══██╔══╝██║   ██║
   ██║     ██║  ██║   ██║   ██║   ██║
   ██║     ██║  ██║   ██║   ╚██╗ ██╔╝
-  ╚██████╗██████╔╝   ██║    ╚████╔╝ 
-   ╚═════╝╚═════╝    ╚═╝     ╚═══╝   
+  ╚██████╗██████╔╝   ██║    ╚████╔╝
+   ╚═════╝╚═════╝    ╚═╝     ╚═══╝
      HACK SCANNER (INSECAM)[/bold red]
 [bold yellow]⚠️ WARNING : I AM NOT RESPONSIBLE FOR THE MISUSE ![/bold yellow]"""
-    
+
     console.print(Panel(cctv_banner, title="[bold red]CCTV SECURITY[/bold red]", subtitle="[bold cyan]Author : RendiSec[/bold cyan]"))
-    
+
     countries_list = [
         ("[01]", "United States", "[31]", "Mexico", "[61]", "Moldova"),
         ("[02]", "Japan", "[32]", "Finland", "[62]", "Nicaragua"),
@@ -979,7 +1196,7 @@ def menu_cctv_hack():
             "MD", "NI", "MT", "TT", "SA", "HR", "CY", "PK", "AE", "KZ",
             "KW", "VE", "GE", "ME", "SV", "LU", "CW", "PR", "CR", "BY",
             "AL", "LI", "BA", "PY", "PH", "FO", "GT", "NP", "PE", "UY",
-            "-" , "AD", "AG", "AM", "AO", "AU", "AW", "AZ", "BB",
+            "-", "AD", "AG", "AM", "AO", "AU", "AW", "AZ", "BB",
             "BQ", "BS", "BW", "CG", "CI", "DZ", "FJ", "GA", "GG", "GL",
             "GP", "GU", "GY", "HN", "JE", "JM", "JO", "KE", "KH", "KN",
             "KY", "LA", "LB", "LK", "MA", "MG", "MK", "MN", "MO", "MQ",
@@ -1010,10 +1227,10 @@ def menu_cctv_hack():
         if not match_pages:
             console.print("[bold red]❌ Tidak ada halaman stream ditemukan untuk kode negara ini.[/bold red]")
             return
-            
+
         last_page = int(match_pages[0])
         console.print(f"[bold green][+] Total halaman ditemukan: {last_page}[/bold green]")
-        
+
         filename = f"cctv_links_{country}.txt"
         found_count = 0
 
@@ -1021,7 +1238,7 @@ def menu_cctv_hack():
             for page in range(1, min(last_page + 1, 3)):
                 page_res = requests.get(f"http://www.insecam.org/en/bycountry/{country}/?page={page}", headers=headers, timeout=10)
                 find_ip = re.findall(r"http://\d+.\d+.\d+.\d+:\d+", page_res.text)
-                
+
                 for ip in set(find_ip):
                     try:
                         check = requests.get(ip, headers=headers, timeout=2)
@@ -1029,7 +1246,7 @@ def menu_cctv_hack():
                             console.print(f"[bold green][LIVE][/bold green] {ip}")
                             f.write(ip + "\n")
                             found_count += 1
-                    except:
+                    except Exception:
                         continue
 
         console.print(f"\n[bold green]✨ Selesai! Berhasil menyimpan {found_count} tautan aktif ke file {filename}[/bold green]")
@@ -1057,7 +1274,7 @@ def menu_ai_chat():
             response = requests.post(AI_ENDPOINT, json=payload, headers={"Content-Type": "application/json"}, timeout=30)
             response.raise_for_status()
             res_json = response.json()
-            
+
             answer = None
             choice = dig(res_json, "result.choices.0")
             if choice:
@@ -1087,6 +1304,7 @@ MENU = [
     ("Track Social Media (150+ Platform)", "tracksocial"),
     ("CCTV Hack Scanner (Insecam)", "cctvhack"),
     ("Tanya Cloud AI (Gemini/GPT)", "cloud_ai"),
+    ("Full Web Source Fetcher (Jejer ke Bawah)", "web_source"),
 ]
 
 
@@ -1107,7 +1325,7 @@ def check_login() -> bool:
             box=rich.box.DOUBLE,
             padding=(1, 2)
         ))
-        
+
         password = console.input("[bold yellow]🔐 Masukkan sandi login: [/bold yellow]").strip()
         if password == LOGIN_PASSWORD:
             console.print("\n[bold green]✅ Login Berhasil! Selamat datang, RendiSec.[/bold green]\n")
@@ -1133,16 +1351,16 @@ def interactive() -> int:
             box=rich.box.DOUBLE,
             padding=(1, 2)
         ))
-        
+
         store = load_store() if CRED_FILE.exists() else {}
         active = store.get("active") or "Belum ada"
         console.print(f"[bold cyan]👤 Status Akun Aktif:[/bold cyan] [bold yellow]{active}[/bold yellow]\n")
-        
+
         menu_lines = []
         for i, (label, _) in enumerate(MENU, 1):
             menu_lines.append(f"  [bright_cyan]{i:02d}.[/bright_cyan] [white]{label}[/white]")
         menu_lines.append("  [bright_red]00.[/bright_red] [bold red]Keluar[/bold red]")
-        
+
         console.print(Panel(
             "\n".join(menu_lines),
             title="[bold bright_magenta]📋 XTOLS MAIN MENU[/bold bright_magenta]",
@@ -1151,7 +1369,7 @@ def interactive() -> int:
             padding=(1, 2)
         ))
         console.print()
-        
+
         choice = ask("[bold yellow]➤ Nomor pilihan: [/bold yellow]")
         if choice in ("0", "00", "q", "keluar", ""):
             console.print("[bold cyan]Keluar dari program. Terima kasih![/bold cyan]")
@@ -1196,7 +1414,9 @@ def interactive() -> int:
                 menu_track_social()
             elif action == "cloud_ai":
                 menu_ai_chat()
-                
+            elif action == "web_source":
+                menu_web_source()
+
             console.input("\n[bold green]Tekan Enter untuk kembali ke menu... [/bold green]")
         except GtcError as e:
             console.print(f"\n[bold red][Error] {e}[/bold red]")
@@ -1213,4 +1433,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())   
+    sys.exit(main())
