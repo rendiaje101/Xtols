@@ -1,0 +1,23 @@
+{
+  "name": "xtoolsbotx",
+  "version": "8.4.0",
+  "description": "Xtols Telegram Bot Suite",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "telegraf",
+    "nodejs"
+  ],
+  "author": "RendiSec",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.7.9",
+    "telegraf": "^4.16.3"
+  }
+}
